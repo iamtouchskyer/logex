@@ -27,3 +27,4 @@ dist-ssr
 .harness
 playwright-report
 test-results
+.vercel

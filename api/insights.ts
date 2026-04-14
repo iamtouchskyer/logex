@@ -2,7 +2,22 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
 
-import type { CardIndex, InsightCard } from '../src/pipeline/types'
+interface CardIndex {
+  cards: string[]
+  sessions: string[]
+  lastUpdated: string
+}
+
+interface InsightCard {
+  slug: string
+  category: string
+  confidence: number
+  title: string
+  body: string
+  tags: string[]
+  sessionId: string
+  extractedAt: string
+}
 
 const DATA_DIR = join(process.cwd(), 'public', 'data')
 

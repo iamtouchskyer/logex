@@ -102,23 +102,23 @@ ul, ol {
   --color-border-subtle: #e4e4ee;
 
   --color-text: #1a1a2e;
-  --color-text-secondary: #555570;
-  --color-text-muted: #8888a0;
+  --color-text-secondary: #4a4a64;
+  --color-text-muted: #636380;
 
   --color-accent: #7c3aed;
   --color-accent-hover: #6d28d9;
   --color-accent-dim: rgba(124, 58, 237, 0.08);
-  --color-secondary: #0891b2;
+  --color-secondary: #0e7490;
   --color-secondary-dim: rgba(8, 145, 178, 0.08);
 
-  --color-gotcha: #dc2626;
-  --color-gotcha-bg: rgba(220, 38, 38, 0.08);
-  --color-pattern: #d97706;
-  --color-pattern-bg: rgba(217, 119, 6, 0.08);
-  --color-decision: #2563eb;
-  --color-decision-bg: rgba(37, 99, 235, 0.08);
-  --color-discovery: #059669;
-  --color-discovery-bg: rgba(5, 150, 105, 0.08);
+  --color-gotcha: #b91c1c;
+  --color-gotcha-bg: rgba(185, 28, 28, 0.08);
+  --color-pattern: #92400e;
+  --color-pattern-bg: rgba(146, 64, 14, 0.08);
+  --color-decision: #1d4ed8;
+  --color-decision-bg: rgba(29, 78, 216, 0.08);
+  --color-discovery: #047857;
+  --color-discovery-bg: rgba(4, 120, 87, 0.08);
 
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
