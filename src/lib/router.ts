@@ -8,14 +8,14 @@ interface Route {
 function parseHash(): Route {
   const hash = window.location.hash.slice(1) || '/'
 
-  // Match #/insights/:slug
-  const detailMatch = hash.match(/^\/insights\/([^/]+)$/)
-  if (detailMatch) {
-    return { path: '/insights/:slug', params: { slug: detailMatch[1] } }
+  // Match #/articles/:slug
+  const articleMatch = hash.match(/^\/articles\/([^/]+)$/)
+  if (articleMatch) {
+    return { path: '/articles/:slug', params: { slug: articleMatch[1] } }
   }
 
-  // Match #/insights
-  if (hash === '/insights') {
+  // Match #/articles
+  if (hash === '/articles') {
     return { path: '/', params: {} }
   }
 

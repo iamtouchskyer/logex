@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
-import type { InsightCard } from '../pipeline/types'
-import { CategoryBadge } from '../components/CategoryBadge'
+import type { SessionArticle } from '../pipeline/types'
+import { ProjectBadge } from '../components/ProjectBadge'
 import { navigate } from '../lib/router'
 
 interface Props {
-  cards: InsightCard[]
+  articles: SessionArticle[]
   loading: boolean
   error: string | null
 }
@@ -14,30 +14,25 @@ function formatDayHeader(iso: string): string {
   return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
 }
 
-function formatTime(iso: string): string {
-  const d = new Date(iso)
-  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-}
-
-function groupByDay(cards: InsightCard[]): Map<string, InsightCard[]> {
-  const sorted = [...cards].sort(
-    (a, b) => new Date(b.extractedAt).getTime() - new Date(a.extractedAt).getTime(),
+function groupByDay(articles: SessionArticle[]): Map<string, SessionArticle[]> {
+  const sorted = [...articles].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
   )
-  const groups = new Map<string, InsightCard[]>()
-  for (const card of sorted) {
-    const day = card.extractedAt.slice(0, 10) // YYYY-MM-DD
+  const groups = new Map<string, SessionArticle[]>()
+  for (const article of sorted) {
+    const day = article.date.slice(0, 10)
     const group = groups.get(day)
     if (group) {
-      group.push(card)
+      group.push(article)
     } else {
-      groups.set(day, [card])
+      groups.set(day, [article])
     }
   }
   return groups
 }
 
-export function Timeline({ cards, loading, error }: Props) {
-  const grouped = useMemo(() => groupByDay(cards), [cards])
+export function Timeline({ articles, loading, error }: Props) {
+  const grouped = useMemo(() => groupByDay(articles), [articles])
 
   if (loading) {
     return (
@@ -57,11 +52,11 @@ export function Timeline({ cards, loading, error }: Props) {
     )
   }
 
-  if (cards.length === 0) {
+  if (articles.length === 0) {
     return (
       <div className="state-message">
-        <p>No insights to display</p>
-        <p className="state-message__detail">Extract some insights from your sessions first</p>
+        <p>No articles to display</p>
+        <p className="state-message__detail">Publish some session articles first</p>
       </div>
     )
   }
@@ -69,35 +64,33 @@ export function Timeline({ cards, loading, error }: Props) {
   return (
     <section className="timeline" aria-label="Timeline">
       <h2 className="timeline__heading">Timeline</h2>
-      {Array.from(grouped.entries()).map(([day, dayCards]) => (
+      {Array.from(grouped.entries()).map(([day, dayArticles]) => (
         <div key={day} className="timeline__group">
-          <h3 className="timeline__date">{formatDayHeader(dayCards[0].extractedAt)}</h3>
+          <h3 className="timeline__date">{formatDayHeader(dayArticles[0].date)}</h3>
           <div className="timeline__track">
-            {dayCards.map((card) => (
+            {dayArticles.map((article) => (
               <article
-                key={card.slug}
+                key={article.slug}
                 className="timeline__entry"
-                onClick={() => navigate(`/insights/${card.slug}`)}
+                onClick={() => navigate(`/articles/${article.slug}`)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault()
-                    navigate(`/insights/${card.slug}`)
+                    navigate(`/articles/${article.slug}`)
                   }
                 }}
                 tabIndex={0}
                 role="link"
-                aria-label={`View: ${card.title}`}
+                aria-label={`Read: ${article.title}`}
               >
                 <div className="timeline__marker" aria-hidden="true" />
                 <div className="timeline__content">
                   <div className="timeline__entry-header">
-                    <CategoryBadge category={card.category} />
-                    <time className="timeline__time" dateTime={card.extractedAt}>
-                      {formatTime(card.extractedAt)}
-                    </time>
+                    <ProjectBadge project={article.project} />
+                    <span className="timeline__duration">{article.duration}</span>
                   </div>
-                  <h4 className="timeline__title">{card.title}</h4>
-                  <p className="timeline__body">{card.body}</p>
+                  <h4 className="timeline__title">{article.title}</h4>
+                  <p className="timeline__body">{article.summary}</p>
                 </div>
               </article>
             ))}

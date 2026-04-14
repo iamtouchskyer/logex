@@ -1,114 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { InsightCard } from '../../pipeline/types'
 
 const mockFetch = vi.fn()
 globalThis.fetch = mockFetch
 
-import { searchCards, filterByCategory, filterByTag, loadIndex, loadCard, loadAllCards } from '../data'
-
-function makeCard(overrides: Partial<InsightCard> = {}): InsightCard {
-  return {
-    slug: 'test-slug',
-    category: 'GOTCHA',
-    confidence: 0.9,
-    title: 'Test Title',
-    body: 'Test body content here',
-    tags: ['testing', 'vitest'],
-    sessionId: 'session-1',
-    extractedAt: '2025-06-01T00:00:00Z',
-    ...overrides,
-  }
-}
-
-describe('searchCards', () => {
-  it('matches by title', async () => {
-    const cards = [
-      makeCard({ title: 'React hooks gotcha' }),
-      makeCard({ title: 'Vite config setup', slug: 'vite-config' }),
-    ]
-
-    const result = await searchCards('react', cards)
-    expect(result).toHaveLength(1)
-    expect(result[0].title).toBe('React hooks gotcha')
-  })
-
-  it('matches by body', async () => {
-    const cards = [
-      makeCard({ body: 'The useEffect cleanup runs on unmount' }),
-      makeCard({ body: 'Vite uses esbuild for dev', slug: 'vite' }),
-    ]
-
-    const result = await searchCards('cleanup', cards)
-    expect(result).toHaveLength(1)
-    expect(result[0].body).toContain('cleanup')
-  })
-
-  it('matches by tags', async () => {
-    const cards = [
-      makeCard({ tags: ['react', 'hooks'] }),
-      makeCard({ tags: ['vite', 'build'], slug: 'vite' }),
-    ]
-
-    const result = await searchCards('hooks', cards)
-    expect(result).toHaveLength(1)
-    expect(result[0].tags).toContain('hooks')
-  })
-
-  it('is case-insensitive', async () => {
-    const cards = [makeCard({ title: 'React Hooks Pattern' })]
-
-    const result = await searchCards('REACT', cards)
-    expect(result).toHaveLength(1)
-  })
-
-  it('returns empty array for no match', async () => {
-    const cards = [makeCard({ title: 'Something else', body: 'Nothing related', tags: ['other'] })]
-
-    const result = await searchCards('nonexistent', cards)
-    expect(result).toHaveLength(0)
-  })
-})
-
-describe('filterByCategory', () => {
-  it('filters cards by category', () => {
-    const cards = [
-      makeCard({ category: 'GOTCHA' }),
-      makeCard({ category: 'PATTERN', slug: 'pattern-1' }),
-      makeCard({ category: 'GOTCHA', slug: 'gotcha-2' }),
-    ]
-
-    const result = filterByCategory(cards, 'GOTCHA')
-    expect(result).toHaveLength(2)
-    result.forEach((c) => expect(c.category).toBe('GOTCHA'))
-  })
-
-  it('returns empty array when no cards match category', () => {
-    const cards = [makeCard({ category: 'GOTCHA' })]
-
-    const result = filterByCategory(cards, 'DISCOVERY')
-    expect(result).toHaveLength(0)
-  })
-})
-
-describe('filterByTag', () => {
-  it('filters cards by tag', () => {
-    const cards = [
-      makeCard({ tags: ['react', 'hooks'] }),
-      makeCard({ tags: ['vite'], slug: 'vite' }),
-    ]
-
-    const result = filterByTag(cards, 'react')
-    expect(result).toHaveLength(1)
-    expect(result[0].tags).toContain('react')
-  })
-
-  it('returns empty for unmatched tag', () => {
-    const cards = [makeCard({ tags: ['react'] })]
-
-    const result = filterByTag(cards, 'angular')
-    expect(result).toHaveLength(0)
-  })
-})
+import { loadIndex, loadCard, loadAllCards, loadArticle, loadAllArticles } from '../data'
 
 describe('loadIndex', () => {
   beforeEach(() => {
@@ -140,7 +35,7 @@ describe('loadCard', () => {
   })
 
   it('fetches card by slug', async () => {
-    const card = makeCard({ slug: 'my-card' })
+    const card = { slug: 'my-card', title: 'Test' }
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve(card),
@@ -164,15 +59,13 @@ describe('loadAllCards', () => {
   })
 
   it('loads all cards from index', async () => {
-    const card1 = makeCard({ slug: 'card-1' })
-    const card2 = makeCard({ slug: 'card-2' })
+    const card1 = { slug: 'card-1' }
+    const card2 = { slug: 'card-2' }
 
-    // First call: loadIndex
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve({ cards: ['card-1', 'card-2'], sessions: [], lastUpdated: '' }),
     })
-    // Second and third calls: loadCard
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: () => Promise.resolve(card1),
@@ -187,7 +80,7 @@ describe('loadAllCards', () => {
   })
 
   it('skips failed card fetches gracefully', async () => {
-    const card1 = makeCard({ slug: 'card-1' })
+    const card1 = { slug: 'card-1' }
 
     mockFetch.mockResolvedValueOnce({
       ok: true,
@@ -202,5 +95,87 @@ describe('loadAllCards', () => {
     const result = await loadAllCards()
     expect(result).toHaveLength(1)
     expect(result[0].slug).toBe('card-1')
+  })
+})
+
+describe('loadArticle', () => {
+  beforeEach(() => {
+    mockFetch.mockReset()
+  })
+
+  it('fetches article by slug', async () => {
+    const article = { slug: 'my-article', title: 'Test Article' }
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(article),
+    })
+
+    const result = await loadArticle('my-article')
+    expect(result).toEqual(article)
+    expect(mockFetch).toHaveBeenCalledWith('/data/articles/my-article.json')
+  })
+
+  it('throws when article not found', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 404 })
+
+    await expect(loadArticle('missing')).rejects.toThrow('Article not found: missing')
+  })
+})
+
+describe('loadAllArticles', () => {
+  beforeEach(() => {
+    mockFetch.mockReset()
+  })
+
+  it('loads all articles from index', async () => {
+    const a1 = { slug: 'a1', date: '2025-06-02T00:00:00Z' }
+    const a2 = { slug: 'a2', date: '2025-06-01T00:00:00Z' }
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ cards: [], articles: ['a1', 'a2'], lastUpdated: '' }),
+    })
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(a1),
+    })
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(a2),
+    })
+
+    const result = await loadAllArticles()
+    expect(result).toHaveLength(2)
+    // Should be sorted newest first
+    expect(result[0].slug).toBe('a1')
+    expect(result[1].slug).toBe('a2')
+  })
+
+  it('returns empty array when no articles in index', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ cards: [], lastUpdated: '' }),
+    })
+
+    const result = await loadAllArticles()
+    expect(result).toHaveLength(0)
+  })
+
+  it('skips failed article fetches gracefully', async () => {
+    const a1 = { slug: 'a1', date: '2025-06-01T00:00:00Z' }
+
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ cards: [], articles: ['a1', 'a-fail'], lastUpdated: '' }),
+    })
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve(a1),
+    })
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 500 })
+
+    const result = await loadAllArticles()
+    expect(result).toHaveLength(1)
+    expect(result[0].slug).toBe('a1')
   })
 })

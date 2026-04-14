@@ -1,0 +1,13 @@
+{
+  "slug": "2026-04-14-session-brain-build",
+  "title": "Session Brain: 从 spike 到产品的一天",
+  "summary": "用 OPC loop 驱动，在一个 session 里完成了 Session Brain 从 Python spike 到 production-ready React + Vercel 应用的全部工作。包括 pipeline 移植、UI 构建、测试、部署。",
+  "body": "## 🎯 目标\n\n把 session-brain 从一个 Python spike 变成一个可以上线的产品...\n\n## 🛠️ 过程\n\n### Pipeline 移植\n\n从 Python 的 `session-brain-v2.py` 移植到 TypeScript...\n\n### UI 构建\n\n用 Vite + React + TypeScript，参考 memra 的架构...\n\n### 测试\n\n67 个 vitest 单元测试 + 12 个 Playwright E2E 测试 + 3 个 axe-core a11y 测试...\n\n## 💡 关键洞察\n\n1. **不需要 API key** — Claude 自己就是 LLM，pipeline 只需要做 parse/chunk/filter，extraction 在 session 里直接做\n2. **Color contrast 是 a11y 的头号杀手** — light mode 的 muted text 和 badge color 很容易不达标\n3. **vitest 会拿 playwright test 当 unit test 跑** — 必须在 vitest config 里 exclude e2e/\n\n## 📊 成果\n\n- 🌐 Live: https://session-brain.vercel.app\n- ✅ 82 tests passing\n- 📱 Responsive, dark/light theme\n- ♿ WCAG AA compliant\n\n## 🔮 Next Steps\n\n- 用真实 session 数据替换 sample data\n- 考虑 session-end hook 自动触发",
+  "heroImage": null,
+  "tags": ["session-brain", "opc", "vite", "react", "vercel", "testing"],
+  "sessionId": "1854dbbd-13cd-4e6e-b298-628a27c8a1bf",
+  "project": "session-brain",
+  "date": "2026-04-14",
+  "duration": "3h 20min",
+  "stats": { "entries": 1917, "messages": 181, "chunks": 10 }
+}

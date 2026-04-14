@@ -56,3 +56,26 @@ export interface CardIndex {
   sessions: string[]
   lastUpdated: string
 }
+
+export interface SessionArticle {
+  slug: string           // e.g. "2026-04-14-session-brain-opc-loop"
+  title: string          // e.g. "Session Brain: 从 spike 到产品的 OPC Loop"
+  summary: string        // 2-3 sentence executive summary
+  body: string           // Full markdown article body
+  heroImage?: string     // path to hero image (relative to /data/)
+  tags: string[]
+  sessionId: string
+  project: string        // e.g. "session-brain", "mitsein", "opc"
+  date: string           // ISO date
+  duration: string       // e.g. "3h 20min"
+  stats: {
+    entries: number
+    messages: number
+    chunks: number
+  }
+}
+
+export interface ArticleIndex {
+  articles: string[]     // slugs
+  lastUpdated: string
+}
