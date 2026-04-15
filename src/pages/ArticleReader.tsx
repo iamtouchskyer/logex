@@ -113,7 +113,7 @@ export function ArticleReader({ slug, allArticles }: Props) {
                 <span className="reader__stat-pill">{article.stats.subagents.count} subagents</span>
               )}
               {article.stats.costEstimate && (
-                <span className="reader__stat-pill reader__stat-pill--cost">${article.stats.costEstimate.total_cost}</span>
+                <span className="reader__stat-pill reader__stat-pill--cost">${Number(article.stats.costEstimate.total_cost).toFixed(2)}</span>
               )}
             </>
           ) : (
