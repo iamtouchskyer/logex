@@ -14,8 +14,8 @@ function rawUrl(path: string): string {
     // Use API for private repos
     return `https://api.github.com/repos/${REPO}/contents/${path}`
   }
-  // Public repo — use raw.githubusercontent.com
-  return `https://raw.githubusercontent.com/${REPO}/${BRANCH}/${path}`
+  // Public repo — use jsDelivr CDN (has Chinese CDN nodes, raw.githubusercontent.com is GFW-blocked)
+  return `https://cdn.jsdelivr.net/gh/${REPO}@${BRANCH}/${path}`
 }
 
 async function fetchFile<T>(path: string): Promise<T> {
