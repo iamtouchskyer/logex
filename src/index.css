@@ -578,7 +578,6 @@ body {
 
 .state-message__icon {
   color: var(--color-text-muted);
-  opacity: 0.5;
 }
 
 .state-message__detail {

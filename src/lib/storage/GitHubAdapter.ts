@@ -3,6 +3,10 @@ import type { StorageAdapter, ArticleIndex } from './types'
 
 const REPO = import.meta.env.VITE_GITHUB_REPO ?? 'iamtouchskyer/logex-data'
 const BRANCH = import.meta.env.VITE_GITHUB_BRANCH ?? 'main'
+// ⚠️  SECURITY: VITE_* vars are inlined into the browser bundle at build time.
+// NEVER set VITE_GITHUB_TOKEN in .env.production or CI for public deployments —
+// it exposes the token to all visitors. Private repo access must go through a
+// server-side proxy that holds the token out of the client bundle.
 const TOKEN = import.meta.env.VITE_GITHUB_TOKEN ?? ''
 
 function rawUrl(path: string): string {
