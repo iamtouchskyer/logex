@@ -2,6 +2,19 @@
    Logex — Blog/Reader Design System
    ============================================= */
 
+/* --- Utilities --- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* --- Reset / Normalize --- */
 *,
 *::before,
@@ -16,6 +29,10 @@ html {
   -moz-tab-size: 4;
   tab-size: 4;
   scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
 }
 
 body {
@@ -56,7 +73,7 @@ ul, ol {
 
   --color-text: #e4e4ef;
   --color-text-secondary: #9d9db5;
-  --color-text-muted: #6b6b85;
+  --color-text-muted: #9090aa; /* was #6b6b85 — bumped for WCAG AA 4.5:1 on dark bg */
 
   --color-accent: #8b5cf6;
   --color-accent-hover: #a78bfa;
@@ -294,8 +311,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 32px;
+  height: 32px;
   border: none;
   border-radius: var(--radius-full);
   background: var(--color-bg-hover);
@@ -578,6 +595,14 @@ body {
   animation: spin 0.8s linear infinite;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .state-message__spinner {
+    animation: none;
+    border-top-color: var(--color-accent);
+    opacity: 0.6;
+  }
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -694,12 +719,11 @@ body {
   font-size: 0.7rem;
   font-family: var(--font-mono);
   color: var(--color-text-muted);
-  opacity: 0.5;
   cursor: default;
 }
 
 .reader__session-id:hover {
-  opacity: 0.8;
+  color: var(--color-text-secondary);
 }
 
 .reader__sep {
@@ -1353,9 +1377,10 @@ body {
   background: none;
   border: 1px solid var(--color-border);
   color: var(--color-text-muted);
-  padding: 2px 8px;
+  padding: 6px 12px;
+  min-height: 32px;
   border-radius: 4px;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   cursor: pointer;
 }
 

@@ -61,7 +61,7 @@ export function ArticleReader({ slug, allArticles }: Props) {
 
   if (error || !article) {
     return (
-      <div className="state-message state-message--error">
+      <div className="state-message state-message--error" role="alert">
         <p>Article not found</p>
         <p className="state-message__detail">{error || `No article with slug "${slug}"`}</p>
         <button className="btn btn--secondary" onClick={() => navigate('/')} type="button">

@@ -58,6 +58,7 @@ export function ArticlesList({ articles, loading, error }: Props) {
 
   return (
     <section className="articles-list" aria-label="Articles">
+      <h1 className="sr-only">Session Articles</h1>
       <div className="articles-list__controls">
         <div className="articles-list__filters" role="group" aria-label="Filter by project">
           {projects.map((proj) => (
@@ -73,6 +74,17 @@ export function ArticlesList({ articles, loading, error }: Props) {
           ))}
         </div>
         <SearchBar value={search} onChange={setSearch} placeholder="Search articles..." />
+      </div>
+
+      <div
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        className="sr-only"
+      >
+        {filtered.length === 0
+          ? 'No articles found'
+          : `${filtered.length} article${filtered.length === 1 ? '' : 's'} found`}
       </div>
 
       {filtered.length === 0 ? (

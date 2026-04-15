@@ -4,6 +4,18 @@ interface Props {
   content: string
 }
 
+/** Sanitize URLs — only allow safe schemes to prevent XSS via javascript: or data: URIs */
+function safeHref(url: string): string {
+  try {
+    const u = new URL(url, 'https://safe.invalid')
+    if (/^https?:$/.test(u.protocol)) return url
+  } catch {
+    // Relative path — allow
+    if (!url.includes(':')) return url
+  }
+  return '#'
+}
+
 /** Minimal markdown renderer — handles the subset we need for session articles. */
 export function MarkdownRenderer({ content }: Props) {
   const lines = content.split('\n')
@@ -106,7 +118,7 @@ export function MarkdownRenderer({ content }: Props) {
     if (imgMatch) {
       elements.push(
         <figure key={key++} className="md-figure">
-          <img src={imgMatch[2]} alt={imgMatch[1]} className="md-img" />
+          <img src={safeHref(imgMatch[2])} alt={imgMatch[1]} className="md-img" />
           {imgMatch[1] && <figcaption className="md-figcaption">{imgMatch[1]}</figcaption>}
         </figure>,
       )
@@ -155,7 +167,7 @@ function renderInline(text: string): React.ReactNode {
     } else if (match[7]) {
       // Link
       parts.push(
-        <a key={key++} href={match[9]} className="md-link" target="_blank" rel="noopener noreferrer">
+        <a key={key++} href={safeHref(match[9])} className="md-link" target="_blank" rel="noopener noreferrer">
           {match[8]}
         </a>,
       )
