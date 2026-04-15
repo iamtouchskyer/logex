@@ -615,6 +615,9 @@ body {
 .reader {
   max-width: var(--reader-max);
   margin: 0 auto;
+  padding-left: 24px;
+  padding-right: 24px;
+  box-sizing: border-box;
 }
 
 .reader__nav {
@@ -2733,14 +2736,7 @@ body {
    F5.1 — Mobile fixes (max-width: 480px)
    ============================================= */
 
-/* 1. No horizontal overflow */
-html,
-body {
-  overflow-x: hidden;
-  max-width: 100vw;
-}
-
-/* 2. Code blocks: horizontal scroll, no overflow */
+/* Code blocks: horizontal scroll, no overflow (global — safe, additive only) */
 pre,
 pre code,
 .md-code-block {
@@ -2750,7 +2746,14 @@ pre code,
 }
 
 @media (max-width: 480px) {
-  /* 3. Body + form inputs: 16px minimum to prevent iOS auto-zoom */
+  /* 1. No horizontal overflow on mobile */
+  html,
+  body {
+    overflow-x: clip; /* clip avoids sticky breakage that hidden causes */
+    max-width: 100vw;
+  }
+
+  /* 2. Body + form inputs: 16px minimum to prevent iOS auto-zoom */
   input,
   textarea,
   select,
