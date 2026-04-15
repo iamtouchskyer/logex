@@ -1306,8 +1306,29 @@ body {
   box-shadow: 0 8px 24px rgba(124, 58, 237, 0.25);
 }
 
-.landing__note {
+.landing__sample-link {
+  display: inline-block;
   margin-top: 16px;
+  font-size: 0.9rem;
+  color: var(--color-accent-cyan);
+  text-decoration: none;
+  opacity: 0.85;
+  transition: opacity 0.15s ease;
+}
+
+.landing__sample-link:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.landing__sample-link:focus-visible {
+  outline: 2px solid var(--color-accent-cyan);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.landing__note {
+  margin-top: 12px;
   font-size: 0.8rem;
   color: var(--color-text-muted);
 }

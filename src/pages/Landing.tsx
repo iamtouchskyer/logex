@@ -52,8 +52,17 @@ export function Landing({ onLogin, theme, toggleTheme }: Props) {
           Sign in with GitHub
         </button>
 
+        <a
+          className="landing__sample-link"
+          href="https://session-brain.vercel.app/articles/2026-04-15-opc-spec-to-code"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Read a sample article →
+        </a>
+
         <p className="landing__note">
-          Personal & private. Only you can see your session articles.
+          Personal &amp; private. Only you can see your session articles.
         </p>
       </main>
 
