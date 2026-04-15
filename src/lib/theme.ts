@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 
 type Theme = 'dark' | 'light'
 
-const STORAGE_KEY = 'session-brain-theme'
+const STORAGE_KEY = 'logex-theme'
 
 function getInitialTheme(): Theme {
   const stored = localStorage.getItem(STORAGE_KEY)

@@ -9,7 +9,7 @@ export function Landing({ onLogin, theme, toggleTheme }: Props) {
     <div className="landing">
       <div className="landing__bg" />
       <header className="landing__header">
-        <span className="landing__brand">Session Brain</span>
+        <span className="landing__brand">Logex</span>
         <button
           className="landing__theme-toggle"
           onClick={toggleTheme}
@@ -26,7 +26,7 @@ export function Landing({ onLogin, theme, toggleTheme }: Props) {
           deserves to be remembered.
         </h1>
         <p className="landing__subtitle">
-          Session Brain turns Claude Code transcripts into blog-quality articles —
+          Logex turns Claude Code transcripts into blog-quality articles —
           automatically. Your sessions, your insights, your narrative.
         </p>
 

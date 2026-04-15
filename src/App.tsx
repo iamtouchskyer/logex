@@ -67,9 +67,9 @@ function App() {
           <a
             href="#/"
             className="nav__logo"
-            aria-label="Session Brain home"
+            aria-label="Logex home"
           >
-            <span className="nav__logo-text">Session Brain</span>
+            <span className="nav__logo-text">Logex</span>
           </a>
 
           <nav className="nav__links" aria-label="Main navigation">

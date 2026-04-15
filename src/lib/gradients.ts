@@ -1,5 +1,5 @@
 export const GRADIENTS: Record<string, string> = {
-  'session-brain': 'linear-gradient(135deg, #7c3aed 0%, #06b6d4 100%)',
+  'logex': 'linear-gradient(135deg, #7c3aed 0%, #06b6d4 100%)',
   mitsein: 'linear-gradient(135deg, #06b6d4 0%, #10b981 100%)',
   opc: 'linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)',
   jingxia: 'linear-gradient(135deg, #10b981 0%, #3b82f6 100%)',

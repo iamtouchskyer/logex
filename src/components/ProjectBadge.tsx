@@ -1,5 +1,5 @@
 const PROJECT_COLORS: Record<string, { color: string; bg: string }> = {
-  'session-brain': { color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.12)' },
+  'logex': { color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.12)' },
   mitsein: { color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.12)' },
   opc: { color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.12)' },
   jingxia: { color: '#10b981', bg: 'rgba(16, 185, 129, 0.12)' },
