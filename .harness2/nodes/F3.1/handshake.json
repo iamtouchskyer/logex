@@ -1,0 +1,14 @@
+{
+  "nodeId": "F3.1",
+  "nodeType": "build",
+  "runId": "run_1",
+  "status": "completed",
+  "timestamp": "2026-04-15T16:00:00.000Z",
+  "summary": "Left sidebar with Projects/Tags/Stats, collapsible desktop, mobile drawer. localStorage persistence.",
+  "verdict": "PASS",
+  "artifacts": [
+    {"type": "cli-output", "path": ".harness2/nodes/F3.1/run_1/build.md"},
+    {"type": "screenshot", "path": ".harness2/nodes/F3.1/run_1/sidebar-desktop-expanded.png"},
+    {"type": "screenshot", "path": ".harness2/nodes/F3.1/run_1/sidebar-mobile-closed.png"}
+  ]
+}

@@ -24,6 +24,11 @@ function parseHash(): Route {
     return { path: '/timeline', params: {} }
   }
 
+  // Match #/settings/shares
+  if (hash === '/settings/shares') {
+    return { path: '/settings/shares', params: {} }
+  }
+
   // Default
   return { path: '/', params: {} }
 }
