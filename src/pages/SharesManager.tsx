@@ -118,8 +118,9 @@ export function SharesManager() {
     void loadShares()
   }, [loadShares])
 
-  async function handleDelete(id: string) {
+  async function handleDelete(id: string, slug: string) {
     if (deletingId) return
+    if (!window.confirm(`Delete share link for "${slug}"? This cannot be undone.`)) return
     setDeletingId(id)
     try {
       const res = await fetch(`/api/share/${encodeURIComponent(id)}`, {
@@ -246,7 +247,7 @@ export function SharesManager() {
                       <button
                         type="button"
                         className="shares-manager__delete-btn"
-                        onClick={() => void handleDelete(share.id)}
+                        onClick={() => void handleDelete(share.id, share.slug)}
                         disabled={deletingId === share.id}
                         aria-label={`Delete share link for ${share.slug}`}
                         title="Delete share link"
