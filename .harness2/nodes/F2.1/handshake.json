@@ -1,0 +1,17 @@
+{
+  "nodeId": "F2.1",
+  "nodeType": "build",
+  "runId": "run_1",
+  "status": "completed",
+  "timestamp": "2026-04-16T00:08:27Z",
+  "summary": "Share link API: POST /api/share (create, bcrypt pw, nanoid-style 12-char id, Vercel Blob), GET /api/share (list), GET /api/share/[id] (public validate with rate limit + expiry), DELETE /api/share/[id] (owner-only revoke). Pure helper layer in _lib.ts; 35 unit tests, 107 total passing. Build clean. Pre-existing Sidebar RefObject TS error fixed as collateral.",
+  "verdict": "PASS",
+  "artifacts": [
+    {"type": "source", "path": "api/share/index.ts"},
+    {"type": "source", "path": "api/share/[id].ts"},
+    {"type": "source", "path": "api/share/_lib.ts"},
+    {"type": "test", "path": "src/lib/__tests__/share-api.test.ts"},
+    {"type": "cli-output", "path": ".harness2/nodes/F2.1/run_1/build.md"},
+    {"type": "verify-script", "path": ".harness2/nodes/F2.1/run_1/verify-script.md"}
+  ]
+}

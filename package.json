@@ -16,6 +16,9 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",
+    "@vercel/blob": "^2.3.3",
+    "bcryptjs": "^3.0.3",
+    "nanoid": "^5.1.9",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },
@@ -26,6 +29,7 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@types/bcryptjs": "^2.4.6",
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

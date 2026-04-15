@@ -10,7 +10,7 @@ interface SidebarProps {
   mobileOpen: boolean
   onMobileClose: () => void
   /** Ref forwarded to mobile drawer div — used for focus trap */
-  drawerRef?: RefObject<HTMLDivElement>
+  drawerRef?: RefObject<HTMLDivElement | null>
   /** Called when user clicks a project filter */
   onProjectClick?: (project: string) => void
   /** Called when user clicks a tag filter */
