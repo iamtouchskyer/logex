@@ -29,6 +29,12 @@ function parseHash(): Route {
     return { path: '/settings/shares', params: {} }
   }
 
+  // Match #/share/:id
+  const shareMatch = hash.match(/^\/share\/([^/]+)$/)
+  if (shareMatch) {
+    return { path: '/share/:id', params: { id: shareMatch[1] } }
+  }
+
   // Default
   return { path: '/', params: {} }
 }

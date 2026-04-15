@@ -10,7 +10,8 @@ import { ArticlesList } from './pages/ArticlesList'
 import { ArticleReader } from './pages/ArticleReader'
 import { Timeline } from './pages/Timeline'
 import { Landing } from './pages/Landing'
-import { SharesPlaceholder } from './pages/SharesPlaceholder'
+import { SharesManager } from './pages/SharesManager'
+import { SharePage } from './pages/SharePage'
 
 const SIDEBAR_COLLAPSED_KEY = 'logex-sidebar-collapsed'
 
@@ -131,6 +132,11 @@ function App() {
     )
   }
 
+  // Public share route — no auth required, render before auth gate
+  if (route.path === '/share/:id') {
+    return <SharePage id={route.params.id} />
+  }
+
   // Not authenticated — show landing page
   if (!user) {
     return <Landing onLogin={login} theme={theme} toggleTheme={toggle} />
@@ -143,7 +149,7 @@ function App() {
       case '/timeline':
         return <Timeline articles={articles} loading={loading} error={error} />
       case '/settings/shares':
-        return <SharesPlaceholder />
+        return <SharesManager />
       default:
         return <ArticlesList articles={articles} loading={loading} error={error} />
     }
