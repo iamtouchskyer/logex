@@ -1,0 +1,2 @@
+- **Tick 1** [F1.1] (implement): Extended MarkdownRenderer: tables, strikethrough, nested lists, setext headings, indented code blocks. 16 tests added, all passing. — 2026-04-15T15:22:46.294Z
+- **Tick 2** [F1.2] (review): FAIL — 7 critical: multi-line paragraph merging, indented-code-before-list ordering, setext/HR ambiguity, table false positive, unclosed fence, safeHref design gap — 2026-04-15T15:26:12.275Z

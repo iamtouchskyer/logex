@@ -1,0 +1,12 @@
+{
+  "nodeId": "F1.4",
+  "nodeType": "review",
+  "runId": "run_1",
+  "status": "completed",
+  "timestamp": "2026-04-15T16:45:00Z",
+  "summary": "Review ITERATE — all 6 F1.2 criticals confirmed fixed. 1 new regression found (para accumulator absorbs setext heading text). Immediately patched in same tick (1-liner look-ahead guard + table body pipe consistency). All 64 tests passing after patch. commit ce92945.",
+  "verdict": "PASS",
+  "artifacts": [
+    {"type": "cli-output", "path": ".harness2/nodes/F1.4/run_1/eval-frontend.md"}
+  ]
+}

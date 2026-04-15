@@ -1,0 +1,12 @@
+{
+  "nodeId": "F4.1",
+  "nodeType": "build",
+  "runId": "run_1",
+  "status": "completed",
+  "timestamp": "2026-04-15T23:38:30.000Z",
+  "summary": "Lazy list loading (loadAllArticles returns ArticleMeta[] from index only, 11 reqs → 1) + two-tier cache: in-memory TTL Map (5min/30min) + Cache Storage stale-while-revalidate for public CDN. All components updated to ArticleMeta types. 72 tests pass, tsc clean.",
+  "verdict": "PASS",
+  "artifacts": [
+    {"type": "cli-output", "path": ".harness2/nodes/F4.1/run_1/build.md"}
+  ]
+}

@@ -1,0 +1,71 @@
+{
+  "tick": 4,
+  "unit": "F1.4",
+  "description": "Re-review PASS — all 6 F1.2 criticals confirmed fixed. 1 new regression (setext look-ahead) patched inline. 64 tests passing.",
+  "status": "completed",
+  "artifacts": [
+    ".harness2/nodes/F1.4/run_1/eval-frontend.md"
+  ],
+  "next_unit": "F4.1",
+  "blockers": [],
+  "review_of_previous": "",
+  "plan_file": ".harness2/plan.md",
+  "units_total": 14,
+  "unit_ids": [
+    "F1.1",
+    "F1.2",
+    "F1.3",
+    "F1.4",
+    "F4.1",
+    "F4.2",
+    "F3.1",
+    "F3.2",
+    "F2.1",
+    "F2.2",
+    "F2.3",
+    "F2.4",
+    "F5.1",
+    "F5.2"
+  ],
+  "_written_by": "opc-harness",
+  "_plan_hash": "554e8e802b55d8fa",
+  "_last_modified": "2026-04-15T15:33:18.311Z",
+  "_git_head": "ce92945",
+  "_tick_history": [
+    {
+      "unit": "F1.1",
+      "tick": 1,
+      "status": "completed"
+    },
+    {
+      "unit": "F1.2",
+      "tick": 2,
+      "status": "completed",
+      "verdict": "FAIL"
+    },
+    {
+      "unit": "F1.3",
+      "tick": 3,
+      "status": "completed"
+    },
+    {
+      "unit": "F1.4",
+      "tick": 4,
+      "status": "completed"
+    }
+  ],
+  "_max_total_ticks": 36,
+  "_started_at": "2026-04-15T15:18:13.278Z",
+  "_max_duration_hours": 24,
+  "_write_nonce": "4f546b4d438cce2d",
+  "_external_validators": {
+    "pre_commit_hooks": false,
+    "test_script": true,
+    "lint_script": true,
+    "typecheck_script": false
+  },
+  "_last_review_evals": {
+    ".harness2/nodes/F1.2/run_1/eval-frontend.md": "a2e701aafa3dbfaf",
+    ".harness2/nodes/F1.2/run_1/eval-tester.md": "bb79290eeb527c28"
+  }
+}
