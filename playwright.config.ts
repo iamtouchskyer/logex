@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
 
+// Use a dedicated port for E2E tests to avoid conflicts with other dev servers
+const E2E_PORT = 5199
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -7,15 +10,16 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: `http://localhost:${E2E_PORT}`,
     trace: 'on-first-retry',
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
+    command: `VITE_E2E_PORT=${E2E_PORT} npx vite --port ${E2E_PORT} --strictPort`,
+    url: `http://localhost:${E2E_PORT}`,
+    reuseExistingServer: false,
+    timeout: 30000,
   },
 })

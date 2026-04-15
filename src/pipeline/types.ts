@@ -62,12 +62,12 @@ export interface SessionArticle {
   title: string          // e.g. "Session Brain: 从 spike 到产品的 OPC Loop"
   summary: string        // 2-3 sentence executive summary
   body: string           // Full markdown article body
-  heroImage?: string     // path to hero image (relative to /data/)
+  heroImage?: string | null  // full https:// URL or null
   tags: string[]
   sessionId: string
   project: string        // e.g. "session-brain", "mitsein", "opc"
   date: string           // ISO date
-  duration: string       // e.g. "3h 20min"
+  duration?: string      // e.g. "3h 20min" — optional, some older articles may omit
   stats: {
     entries: number
     messages: number

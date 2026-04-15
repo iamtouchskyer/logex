@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { SessionArticle } from '../pipeline/types'
 import { ProjectBadge } from './ProjectBadge'
 import { navigate } from '../lib/router'
@@ -9,11 +10,16 @@ interface Props {
 
 function formatDate(iso: string): string {
   const d = new Date(iso)
-  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 export function ArticleCard({ article }: Props) {
+  const [imgError, setImgError] = useState(false)
   const gradient = GRADIENTS[article.project] ?? DEFAULT_GRADIENT
+  const showGradient = !article.heroImage || imgError
+
+  const stats = article.stats
+  const hasRichStats = stats && 'tokens' in stats && stats.tokens
 
   return (
     <article
@@ -26,33 +32,67 @@ export function ArticleCard({ article }: Props) {
         }
       }}
       tabIndex={0}
-      role="link"
+      role="button"
       aria-label={`Read: ${article.title}`}
     >
       <div className="article-card__hero">
-        {article.heroImage ? (
-          <img src={`/data/${article.heroImage}`} alt="" className="article-card__hero-img" />
+        {showGradient ? (
+          <div
+            className="article-card__hero-gradient"
+            style={{ background: gradient }}
+            aria-hidden="true"
+          >
+            <span className="article-card__hero-project">{article.project}</span>
+          </div>
         ) : (
-          <div className="article-card__hero-gradient" style={{ background: gradient }} />
+          <img
+            src={article.heroImage}
+            alt=""
+            loading="lazy"
+            className="article-card__hero-img"
+            onError={() => setImgError(true)}
+          />
         )}
       </div>
+
       <div className="article-card__content">
         <div className="article-card__meta">
           <time dateTime={article.date}>{formatDate(article.date)}</time>
           <span className="article-card__sep" aria-hidden="true">&middot;</span>
-          <span>{article.duration}</span>
-          <span className="article-card__sep" aria-hidden="true">&middot;</span>
           <ProjectBadge project={article.project} />
+          {article.duration && (
+            <>
+              <span className="article-card__sep" aria-hidden="true">&middot;</span>
+              <span>{article.duration}</span>
+            </>
+          )}
         </div>
+
         <h2 className="article-card__title">{article.title}</h2>
         <p className="article-card__summary">{article.summary}</p>
-        {article.tags.length > 0 && (
-          <div className="article-card__tags">
-            {article.tags.map((tag) => (
-              <span key={tag} className="article-card__tag">{tag}</span>
-            ))}
-          </div>
-        )}
+
+        <div className="article-card__footer">
+          {(article.tags ?? []).length > 0 && (
+            <div className="article-card__tags">
+              {(article.tags ?? []).map((tag) => (
+                <span key={tag} className="article-card__tag">{tag}</span>
+              ))}
+            </div>
+          )}
+
+          {hasRichStats && (
+            <div className="article-card__stats">
+              <span className="article-card__stat-pill">
+                {(stats.tokens!.total / 1000).toFixed(0)}K tokens
+              </span>
+              {stats.costEstimate && (
+                <span className="article-card__stat-pill article-card__stat-pill--cost">
+                  ${Number(stats.costEstimate.total_cost).toFixed(2)}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </article>
   )
