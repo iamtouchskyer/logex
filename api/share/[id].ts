@@ -11,7 +11,7 @@ import {
   isValidId,
   type ShareRecord,
   type ShareIndex,
-} from './_lib'
+} from './_lib.js'
 
 // ---------- blob helpers ----------
 

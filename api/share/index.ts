@@ -16,7 +16,7 @@ import {
   type ShareRecord,
   type ShareIndex,
   type ShareMeta,
-} from './_lib'
+} from './_lib.js'
 
 // ---------- blob helpers ----------
 
