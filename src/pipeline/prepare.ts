@@ -1,9 +1,8 @@
 import { execFileSync } from 'child_process'
 import { parseJsonl, extractMessages } from './parse'
 import { chunkByConversation, scoreChunk, filterChunks } from './chunk'
-import { buildExtractionPrompt, buildArticlePrompt } from './prompt'
-import { buildChunkSummaries, buildSegmentationPrompt, buildSegmentsFromGroups } from './segment'
-import type { TopicSegment } from './types'
+import { buildExtractionPrompt } from './prompt'
+import { buildChunkSummaries, buildSegmentationPrompt } from './segment'
 
 const STATS_SCRIPT = `${process.env.HOME}/.claude/skills/session-recap/scripts/extract-session-stats.py`
 

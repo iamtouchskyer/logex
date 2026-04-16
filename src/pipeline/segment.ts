@@ -130,7 +130,7 @@ export function buildSegmentsFromGroups(
   chunks: Chunk[],
   groups: Array<{ title: string; chunkIndices: number[]; project?: string | null; worthWriting: boolean }>,
 ): TopicSegment[] {
-  return groups
+  const segments: (TopicSegment | null)[] = groups
     .filter((g) => g.worthWriting)
     .map((g) => {
       const segChunks = g.chunkIndices
@@ -142,13 +142,15 @@ export function buildSegmentsFromGroups(
       const scores = segChunks.map((c) => c.insightScore ?? 0)
       const totalScore = scores.reduce((a, b) => a + b, 0) / scores.length
 
-      return {
+      const seg: TopicSegment = {
         chunks: segChunks,
-        project: g.project ?? undefined,
         topicHint: g.title,
         timeRange: [segChunks[0].startTs, segChunks[segChunks.length - 1].endTs] as [string, string],
         totalScore,
       }
+      if (g.project != null) seg.project = g.project
+      return seg
     })
-    .filter((s): s is TopicSegment => s !== null)
+
+  return segments.filter((s): s is TopicSegment => s !== null)
 }
