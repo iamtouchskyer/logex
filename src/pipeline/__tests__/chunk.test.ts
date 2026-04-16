@@ -165,9 +165,11 @@ describe('filterChunks', () => {
     const lowChunk = makeChunk([
       makeMsg('user', 'Hello world, nothing special here at all'),
     ])
+    lowChunk.insightScore = scoreChunk(lowChunk)
     const highChunk = makeChunk([
       makeMsg('user', 'Found a bug, root cause is the architecture design pattern because of the reason, discovered a gotcha'),
     ])
+    highChunk.insightScore = scoreChunk(highChunk)
 
     const result = filterChunks([lowChunk, highChunk], 0.25)
     // lowChunk should score 0.1 (< 0.25), highChunk should score above 0.25
@@ -177,10 +179,11 @@ describe('filterChunks', () => {
     }
   })
 
-  it('sets insightScore on all input chunks (even filtered out)', () => {
+  it('filters based on pre-set insightScore', () => {
     const chunk = makeChunk([
       makeMsg('user', 'Simple message without much signal content here'),
     ])
+    chunk.insightScore = scoreChunk(chunk)
 
     filterChunks([chunk], 0.25)
     expect(chunk.insightScore).toBeDefined()
@@ -191,6 +194,7 @@ describe('filterChunks', () => {
     const chunk = makeChunk([
       makeMsg('user', 'Just a plain boring message with no signals'),
     ])
+    chunk.insightScore = scoreChunk(chunk)
 
     const result = filterChunks([chunk], 0.5)
     expect(result).toHaveLength(0)
@@ -200,6 +204,7 @@ describe('filterChunks', () => {
     const lowChunk = makeChunk([
       makeMsg('user', 'Hello, nothing important going on here'),
     ])
+    lowChunk.insightScore = scoreChunk(lowChunk)
 
     const result = filterChunks([lowChunk])
     // Score should be 0.1 which is below default 0.25

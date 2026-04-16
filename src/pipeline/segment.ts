@@ -1,12 +1,11 @@
 import type { Chunk, TopicSegment } from './types'
 
-const PROJECT_PATH_RE = /~\/Code\/([a-zA-Z0-9_-]+)/g
-
 /**
  * Extract project name from user messages in a chunk.
  * Looks for ~/Code/<project> patterns. Used as hint for LLM segmentation.
  */
 export function detectProject(chunk: Chunk): string | undefined {
+  const PROJECT_PATH_RE = /~\/Code\/([a-zA-Z0-9_-]+)/g
   const projects = new Map<string, number>()
 
   for (const msg of chunk.messages) {

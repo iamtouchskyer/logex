@@ -30,6 +30,8 @@ import { join, dirname } from 'path'
  */
 
 // ─── Types ────────────────────────────────────────────────────────────
+// Note: SessionArticle in types.ts defines the canonical article shape.
+// Types below are publish-specific (CLI I/O concerns).
 
 interface NewArticle {
   title: string
@@ -39,6 +41,7 @@ interface NewArticle {
   project?: string
   chunkIndices: number[]
   slug?: string  // LLM-suggested slug, optional
+  stats?: Record<string, unknown>  // optional stats from prepare output
 }
 
 interface ExistingArticleMeta {
@@ -197,7 +200,11 @@ function execute(
         dec.action = 'insert'
       } else {
         const existing = index.articles[existingIdx]
-        const filePath = join(dataDir, existing.path ?? '')
+        if (!existing.path) {
+          console.error(`Warning: existing slug "${dec.existingSlug}" has no path, treating as insert`)
+          dec.action = 'insert'
+        } else {
+        const filePath = join(dataDir, existing.path)
 
         const articleData = {
           slug: existing.slug,
@@ -239,6 +246,7 @@ function execute(
 
         results.push({ slug: existing.slug, action: 'updated', title: article.title })
         continue
+        }
       }
     }
 
@@ -260,7 +268,7 @@ function execute(
       project: article.project ?? '',
       date: slug.slice(0, 10),
       duration: '',
-      stats: {},
+      stats: article.stats ?? {},
     }
 
     mkdirSync(dirname(filePath), { recursive: true })

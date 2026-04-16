@@ -110,6 +110,10 @@ function main() {
   }
 
   // Article mode: output chunk summaries + segmentation prompt for LLM
+  // Pass ALL chunks (not just filtered) so the LLM sees full context.
+  // Scores are already set from the scoring loop above. The segmentation
+  // prompt tells the LLM "score < 0.25 可以跳过", so low-score chunks
+  // are visible but flagged.
   const summaries = buildChunkSummaries(chunks)
   const segPrompt = buildSegmentationPrompt(summaries)
 

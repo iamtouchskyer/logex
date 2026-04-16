@@ -8,6 +8,7 @@ import type { JournalEntry, ContentBlock, Message } from './types'
 export function parseJsonl(filepath: string): JournalEntry[] {
   const raw = readFileSync(filepath, 'utf-8')
   const entries: JournalEntry[] = []
+  let skipped = 0
 
   for (const line of raw.split('\n')) {
     const trimmed = line.trim()
@@ -15,8 +16,12 @@ export function parseJsonl(filepath: string): JournalEntry[] {
     try {
       entries.push(JSON.parse(trimmed))
     } catch {
-      // skip malformed lines
+      skipped++
     }
+  }
+
+  if (skipped > 0) {
+    console.error(`Warning: skipped ${skipped} malformed JSONL line(s)`)
   }
 
   return entries

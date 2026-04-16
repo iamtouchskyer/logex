@@ -36,7 +36,7 @@ export interface TopicSegment {
   totalScore: number       // avg insightScore of chunks
 }
 
-export interface InsightCard {
+// InsightCard, CardIndex, SessionMeta are used by cards mode (--mode cards)
   slug: string
   category: 'GOTCHA' | 'PATTERN' | 'DECISION' | 'DISCOVERY'
   confidence: number
@@ -73,6 +73,7 @@ export interface SessionArticle {
   heroImage?: string | null  // full https:// URL or null
   tags: string[]
   sessionId: string
+  chunkIndices?: number[] // which chunks this article was built from
   project: string        // e.g. "logex", "mitsein", "opc"
   date: string           // ISO date
   duration?: string      // e.g. "3h 20min" — optional, some older articles may omit
@@ -105,9 +106,4 @@ export interface SessionArticle {
     }
     durationMinutes?: number
   }
-}
-
-export interface ArticleIndex {
-  articles: string[]     // slugs
-  lastUpdated: string
 }

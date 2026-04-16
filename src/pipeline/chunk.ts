@@ -78,17 +78,8 @@ export function scoreChunk(chunk: Chunk): number {
 
 /**
  * Filter chunks by insight score. Returns only chunks >= threshold.
+ * Assumes insightScore is already set (via scoreChunk). Does not re-score.
  */
 export function filterChunks(chunks: Chunk[], threshold = 0.25): Chunk[] {
-  const result: Chunk[] = []
-
-  for (const chunk of chunks) {
-    const score = scoreChunk(chunk)
-    chunk.insightScore = score
-    if (score >= threshold) {
-      result.push(chunk)
-    }
-  }
-
-  return result
+  return chunks.filter(c => (c.insightScore ?? 0) >= threshold)
 }
