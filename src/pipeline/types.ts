@@ -37,6 +37,7 @@ export interface TopicSegment {
 }
 
 // InsightCard, CardIndex, SessionMeta are used by cards mode (--mode cards)
+export interface InsightCard {
   slug: string
   category: 'GOTCHA' | 'PATTERN' | 'DECISION' | 'DISCOVERY'
   confidence: number
