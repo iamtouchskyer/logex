@@ -28,7 +28,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ user: null })
   }
 
-  const secret = process.env.SESSION_SECRET ?? 'session-brain-dev-secret'
+  const secret = process.env.SESSION_SECRET ?? 'logex-dev-secret'
   const payload = verifyToken(token, secret)
   if (!payload) {
     return res.status(401).json({ user: null })

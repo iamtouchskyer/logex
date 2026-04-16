@@ -133,7 +133,7 @@ export function getAuthUser(cookieHeader: string | undefined): string | null {
       console.error('FATAL: SESSION_SECRET env var not set in production — refusing auth')
       return null
     }
-    const devSecret = 'session-brain-dev-secret'
+    const devSecret = 'logex-dev-secret'
     const payload = verifySessionToken(token, devSecret)
     if (!payload || typeof payload.login !== 'string') return null
     return payload.login

@@ -59,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // Create signed session token
-  const secret = process.env.SESSION_SECRET ?? 'session-brain-dev-secret'
+  const secret = process.env.SESSION_SECRET ?? 'logex-dev-secret'
   const token = signToken({
     login: user.login,
     name: user.name,

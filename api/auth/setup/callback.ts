@@ -80,7 +80,7 @@ function successPage(appSlug: string, clientId: string, autoConfigured: boolean,
 <body>
   <div class="card">
     <h2>GitHub App Created ✓</h2>
-    <span class="badge">session-brain-${appSlug}</span>
+    <span class="badge">logex-${appSlug}</span>
     <p>Your GitHub App is live. Here's what happens next:</p>
 
     ${autoConfigured ? `

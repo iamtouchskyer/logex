@@ -227,7 +227,7 @@ describe('verifySessionToken', () => {
 // ───────────────────────────────────────────
 
 describe('getAuthUser', () => {
-  const secret = 'session-brain-dev-secret' // matches default in _lib.ts
+  const secret = 'logex-dev-secret' // matches default in _lib.ts
 
   it('returns login from valid session cookie', () => {
     const token = signToken({ login: 'testuser', exp: Math.floor(Date.now() / 1000) + 3600 }, secret)

@@ -28,6 +28,14 @@ export interface Chunk {
   insightScore?: number
 }
 
+export interface TopicSegment {
+  chunks: Chunk[]
+  project?: string         // detected from file paths in user messages
+  topicHint: string        // auto-generated: "debugging mitsein auth" / "logex frontend"
+  timeRange: [string, string]  // [startTs, endTs]
+  totalScore: number       // avg insightScore of chunks
+}
+
 export interface InsightCard {
   slug: string
   category: 'GOTCHA' | 'PATTERN' | 'DECISION' | 'DISCOVERY'
@@ -58,14 +66,14 @@ export interface CardIndex {
 }
 
 export interface SessionArticle {
-  slug: string           // e.g. "2026-04-14-session-brain-opc-loop"
-  title: string          // e.g. "Session Brain: 从 spike 到产品的 OPC Loop"
+  slug: string           // e.g. "2026-04-14-logex-opc-loop"
+  title: string          // e.g. "Logex: 从 spike 到产品的 OPC Loop"
   summary: string        // 2-3 sentence executive summary
   body: string           // Full markdown article body
   heroImage?: string | null  // full https:// URL or null
   tags: string[]
   sessionId: string
-  project: string        // e.g. "session-brain", "mitsein", "opc"
+  project: string        // e.g. "logex", "mitsein", "opc"
   date: string           // ISO date
   duration?: string      // e.g. "3h 20min" — optional, some older articles may omit
   stats: {
