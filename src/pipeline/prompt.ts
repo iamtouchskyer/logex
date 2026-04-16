@@ -1,15 +1,18 @@
-import type { Chunk } from './types'
+import type { Chunk, TopicSegment } from './types'
 
 /**
  * Build the article prompt from filtered chunks.
  * Produces a prompt for writing a full session paper (blog article).
+ * If segment is provided, adds project and topic hint for focus.
  */
 export function buildArticlePrompt(
   chunks: Chunk[],
   sessionId: string,
   meta: { entries: number; messages: number; chunks: number; startTime: string; endTime: string },
-  maxTotalChars = 50000,
+  options?: { segment?: TopicSegment; maxTotalChars?: number },
 ): string {
+  const maxTotalChars = options?.maxTotalChars ?? 50000
+  const segment = options?.segment
   const sorted = [...chunks].sort(
     (a, b) => (b.insightScore ?? 0) - (a.insightScore ?? 0),
   )
@@ -95,6 +98,7 @@ export function buildArticlePrompt(
 - Messages: ${meta.messages}
 - Chunks: ${meta.chunks}
 - Time range: ${meta.startTime} → ${meta.endTime}
+${segment ? `- Project: ${segment.project ?? 'unknown'}\n- Topic: ${segment.topicHint}\n- Segment time: ${segment.timeRange[0]} → ${segment.timeRange[1]}` : ''}
 
 ## Session transcript
 

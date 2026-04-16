@@ -2,6 +2,8 @@ import { execFileSync } from 'child_process'
 import { parseJsonl, extractMessages } from './parse'
 import { chunkByConversation, scoreChunk, filterChunks } from './chunk'
 import { buildExtractionPrompt, buildArticlePrompt } from './prompt'
+import { buildChunkSummaries, buildSegmentationPrompt, buildSegmentsFromGroups } from './segment'
+import type { TopicSegment } from './types'
 
 const STATS_SCRIPT = `${process.env.HOME}/.claude/skills/session-recap/scripts/extract-session-stats.py`
 
@@ -35,13 +37,17 @@ function parseMode(args: string[]): { mode: Mode; rest: string[] } {
 }
 
 /**
- * Prepare extraction prompt from a session JSONL.
- * Does NOT call any API — just parse, chunk, filter, build prompt.
- * Output goes to stdout as JSON: { sessionId, mode, prompt, meta }
+ * Prepare extraction data from a session JSONL.
+ * Does NOT call any LLM API — parse, chunk, score, build summaries.
+ *
+ * For article mode: outputs chunk summaries + segmentation prompt.
+ *   The skill (Claude in-session) reads the segmentation prompt,
+ *   decides topic groups, then builds article prompts per group.
+ *
+ * For cards mode: outputs a single extraction prompt (unchanged).
  *
  * Usage:
  *   npx tsx src/pipeline/prepare.ts <session.jsonl> [--mode article|cards]
- *   Default mode: article
  */
 function main() {
   const args = process.argv.slice(2)
@@ -71,11 +77,9 @@ function main() {
   }
 
   const filtered = filterChunks(chunks)
-  console.error(
-    `Signal chunks: ${filtered.length} / ${chunks.length} (${Math.round((filtered.length / Math.max(chunks.length, 1)) * 100)}%)`,
-  )
+  console.error(`Signal chunks: ${filtered.length} / ${chunks.length} (${Math.round((filtered.length / Math.max(chunks.length, 1)) * 100)}%)`)
 
-  // Extract rich stats from session-recap parser
+  // Extract rich stats
   console.error('Extracting rich stats...')
   const richStats = extractRichStats(jsonlPath)
   if (richStats) {
@@ -94,20 +98,31 @@ function main() {
 
   if (filtered.length === 0) {
     console.error('No signal chunks found.')
-    console.log(JSON.stringify({ sessionId, mode, prompt: null, meta }))
+    console.log(JSON.stringify({ sessionId, mode, prompt: null, chunkSummaries: [], segmentationPrompt: null, meta }))
     process.exit(0)
   }
 
-  const prompt = mode === 'article'
-    ? buildArticlePrompt(filtered, sessionId, meta)
-    : buildExtractionPrompt(filtered, sessionId)
+  // Cards mode: single prompt (unchanged)
+  if (mode === 'cards') {
+    const prompt = buildExtractionPrompt(filtered, sessionId)
+    console.error(`Prompt: ${prompt.length} chars (~${Math.round(prompt.length / 4)} tokens)`)
+    console.log(JSON.stringify({ sessionId, mode, prompt, chunkSummaries: [], segmentationPrompt: null, meta }))
+    return
+  }
 
-  console.error(`Prompt: ${prompt.length} chars (~${Math.round(prompt.length / 4)} tokens)`)
+  // Article mode: output chunk summaries + segmentation prompt for LLM
+  const summaries = buildChunkSummaries(chunks)
+  const segPrompt = buildSegmentationPrompt(summaries)
+
+  console.error(`Chunk summaries: ${summaries.length}`)
+  console.error(`Segmentation prompt: ${segPrompt.length} chars`)
 
   console.log(JSON.stringify({
     sessionId,
     mode,
-    prompt,
+    prompt: null,
+    chunkSummaries: summaries,
+    segmentationPrompt: segPrompt,
     meta,
   }))
 }
