@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { put, list } from '@vercel/blob'
+import { put, get } from '@vercel/blob'
 import {
   generateId,
   hashPassword,
@@ -21,24 +21,22 @@ import {
 // ---------- blob helpers ----------
 
 /**
- * Read blob by key. Uses list() to find the blob, then fetches via downloadUrl.
- * Avoids head() + CDN fetch which can return stale data after recent writes.
+ * Read blob by key. Uses get() for private store access (downloadUrl from list() requires auth on private blobs).
+ * useCache:false avoids stale reads after recent writes.
  */
 async function readBlob<T>(key: string): Promise<T | null> {
   try {
-    const { blobs } = await list({ prefix: key, limit: 1 })
-    const blob = blobs.find((b) => b.pathname === key)
-    if (!blob) return null
-    const res = await fetch(blob.downloadUrl)
-    if (!res.ok) return null
-    return res.json() as Promise<T>
+    const result = await get(key, { access: 'private', useCache: false })
+    if (!result || result.statusCode !== 200) return null
+    return await new Response(result.stream).json() as T
   } catch {
     return null
   }
 }
 
 async function writeBlob(key: string, data: unknown): Promise<void> {
-  await put(key, JSON.stringify(data), { access: 'public', contentType: 'application/json', addRandomSuffix: false })
+  // access: 'private' — BLOB URLs never exposed to client; reads go through server proxy (handleGet)
+  await put(key, JSON.stringify(data), { access: 'private', contentType: 'application/json', addRandomSuffix: false })
 }
 
 // ---------- handlers ----------

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { put, del, list } from '@vercel/blob'
+import { put, del, get } from '@vercel/blob'
 import {
   getAuthUser,
   shareKey,
@@ -16,25 +16,22 @@ import {
 // ---------- blob helpers ----------
 
 /**
- * Read blob by key. Uses list() to find the blob URL, then fetches the content.
- * Avoids the head() + CDN fetch pattern which can serve stale data after deletes.
+ * Read blob by key. Uses get() for private store access (downloadUrl from list() requires auth on private blobs).
+ * useCache:false avoids stale reads after recent writes/deletes.
  */
 async function readBlob<T>(key: string): Promise<T | null> {
   try {
-    const { blobs } = await list({ prefix: key, limit: 1 })
-    const blob = blobs.find((b) => b.pathname === key)
-    if (!blob) return null
-    // Use downloadUrl (bypass CDN) to avoid stale reads after delete
-    const res = await fetch(blob.downloadUrl)
-    if (!res.ok) return null
-    return res.json() as Promise<T>
+    const result = await get(key, { access: 'private', useCache: false })
+    if (!result || result.statusCode !== 200) return null
+    return await new Response(result.stream).json() as T
   } catch {
     return null
   }
 }
 
 async function writeBlob(key: string, data: unknown): Promise<void> {
-  await put(key, JSON.stringify(data), { access: 'public', contentType: 'application/json', addRandomSuffix: false })
+  // access: 'private' — BLOB URLs never exposed to client; reads go through server proxy (handleGet)
+  await put(key, JSON.stringify(data), { access: 'private', contentType: 'application/json', addRandomSuffix: false })
 }
 
 // ---------- fetch article from GitHub data repo ----------
@@ -172,13 +169,9 @@ async function handleDelete(req: VercelRequest, res: VercelResponse): Promise<vo
     return
   }
 
-  // Delete blob — wrapped in try-catch to prevent orphaned index entries
+  // Delete blob — use pathname directly (works for both public and private stores)
   try {
-    const { blobs } = await list({ prefix: shareKey(id), limit: 1 })
-    const blob = blobs.find((b) => b.pathname === shareKey(id))
-    if (blob) {
-      await del(blob.url)
-    }
+    await del(shareKey(id))
   } catch (e) {
     console.error('Failed to delete share blob:', id, e)
     res.status(500).json({ error: 'Failed to delete share' })

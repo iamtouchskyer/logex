@@ -160,6 +160,9 @@ export class GitHubAdapter implements StorageAdapter {
         : (Object.keys(entry.i18n)[0] as Lang)
     const meta = entry.i18n[target]
     if (!meta) throw new Error(`Article has no content in any language: ${slug}`)
-    return fetchFile<SessionArticle>(meta.path, TTL_ARTICLE)
+    const article = await fetchFile<SessionArticle>(meta.path, TTL_ARTICLE)
+    // heroImage lives at index top-level (lang-agnostic) — override per-lang JSON copy
+    // to keep card and detail page in sync after backfill / republish drift.
+    return { ...article, heroImage: entry.heroImage ?? article.heroImage }
   }
 }
