@@ -8,7 +8,6 @@ interface Route {
 }
 
 const LANG_KEY = 'logex.lang'
-const LANG_RE = /^(zh|en)$/
 
 /** Detect initial language preference: localStorage → navigator.language → 'en'. */
 export function detectInitialLang(): Lang {
