@@ -67,7 +67,7 @@ export function Landing({ onLogin, theme, toggleTheme, signedOut }: Props) {
 
         <a
           className="landing__sample-link"
-          href="https://logex.vercel.app/articles/2026-04-15-opc-spec-to-code"
+          href="https://logex-io.vercel.app/articles/2026-04-15-opc-spec-to-code"
           target="_blank"
           rel="noopener noreferrer"
         >
