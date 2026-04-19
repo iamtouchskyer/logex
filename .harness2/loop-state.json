@@ -1,12 +1,13 @@
 {
-  "tick": 5,
-  "unit": "F4.1",
-  "description": "Lazy list (N+1→1 requests), two-tier cache (mem TTL + Cache Storage stale-while-revalidate). 72 tests passing.",
-  "status": "completed",
+  "tick": 14,
+  "unit": "F5.2",
+  "description": "Pipeline complete at tick 14",
+  "status": "pipeline_complete",
   "artifacts": [
-    ".harness2/nodes/F4.1/run_1/build.md"
+    ".harness2/nodes/F5.2/run_1/eval-mobile.md",
+    ".harness2/nodes/F5.2/run_1/eval-css-quality.md"
   ],
-  "next_unit": "F4.2",
+  "next_unit": null,
   "blockers": [],
   "review_of_previous": "",
   "plan_file": ".harness2/plan.md",
@@ -29,8 +30,8 @@
   ],
   "_written_by": "opc-harness",
   "_plan_hash": "554e8e802b55d8fa",
-  "_last_modified": "2026-04-15T15:39:46.071Z",
-  "_git_head": "5f5143a",
+  "_last_modified": "2026-04-16T00:00:09.462Z",
+  "_git_head": "3a522bd614cddd0c7c4947fa176e08459fa503ec",
   "_tick_history": [
     {
       "unit": "F1.1",
@@ -57,6 +58,55 @@
       "unit": "F4.1",
       "tick": 5,
       "status": "completed"
+    },
+    {
+      "unit": "F4.2",
+      "tick": 6,
+      "status": "completed"
+    },
+    {
+      "unit": "F3.1",
+      "tick": 7,
+      "status": "completed"
+    },
+    {
+      "unit": "F3.2",
+      "tick": 8,
+      "status": "completed",
+      "verdict": "FAIL"
+    },
+    {
+      "unit": "F2.1",
+      "tick": 9,
+      "status": "completed"
+    },
+    {
+      "unit": "F2.2",
+      "tick": 10,
+      "status": "completed",
+      "verdict": "FAIL"
+    },
+    {
+      "unit": "F2.3",
+      "tick": 11,
+      "status": "completed"
+    },
+    {
+      "unit": "F2.4",
+      "tick": 12,
+      "status": "completed",
+      "verdict": "FAIL"
+    },
+    {
+      "unit": "F5.1",
+      "tick": 13,
+      "status": "completed"
+    },
+    {
+      "unit": "F5.2",
+      "tick": 14,
+      "status": "completed",
+      "verdict": "FAIL"
     }
   ],
   "_max_total_ticks": 36,
@@ -70,7 +120,7 @@
     "typecheck_script": false
   },
   "_last_review_evals": {
-    ".harness2/nodes/F1.2/run_1/eval-frontend.md": "a2e701aafa3dbfaf",
-    ".harness2/nodes/F1.2/run_1/eval-tester.md": "bb79290eeb527c28"
+    ".harness2/nodes/F5.2/run_1/eval-mobile.md": "476ee30727117fbe",
+    ".harness2/nodes/F5.2/run_1/eval-css-quality.md": "c8da1b67b83c0bbf"
   }
 }

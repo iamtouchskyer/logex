@@ -1,0 +1,27 @@
+{
+  "nodeId": "e2e-user",
+  "nodeType": "execute",
+  "runId": "run_1",
+  "status": "completed",
+  "timestamp": "2026-04-18T00:00:00Z",
+  "verdict": "PASS",
+  "summary": "E2E verification via webapp-testing (Python Playwright). All 6 outcomes passed: Landing renders correctly in both zh/en; sidebar nav, logout button, and footer all switch language; LangToggle aria-pressed matches URL prefix; zero JS/pageerror entries after filtering expected 404 + HMR noise.",
+  "criteria": [
+    {"id": "OUT-1", "status": "pass", "note": "Landing EN title renders"},
+    {"id": "OUT-2", "status": "pass", "note": "Landing ZH title renders"},
+    {"id": "OUT-3", "status": "pass", "note": "LangToggle aria-pressed matches URL in both langs"},
+    {"id": "OUT-4", "status": "pass", "note": "Sidebar nav + logout button switch lang"},
+    {"id": "OUT-5", "status": "pass", "note": "Footer plural strings switch"},
+    {"id": "OUT-6", "status": "pass", "note": "0 JS/pageerror entries; 2 filtered (expected 404 + HMR)"}
+  ],
+  "artifacts": [
+    {"type": "script", "path": ".harness/nodes/e2e-user/run_1/script.py"},
+    {"type": "command-output", "path": ".harness/nodes/e2e-user/run_1/command-output.txt"},
+    {"type": "log", "path": ".harness/nodes/e2e-user/run_1/console.log"},
+    {"type": "screenshot", "path": ".harness/nodes/e2e-user/run_1/screenshot-landing-en.png"},
+    {"type": "screenshot", "path": ".harness/nodes/e2e-user/run_1/screenshot-landing-zh.png"},
+    {"type": "screenshot", "path": ".harness/nodes/e2e-user/run_1/screenshot-loggedin-en.png"},
+    {"type": "screenshot", "path": ".harness/nodes/e2e-user/run_1/screenshot-loggedin-zh.png"}
+  ],
+  "findings": []
+}

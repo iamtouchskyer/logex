@@ -1,0 +1,13 @@
+{
+  "nodeId": "F3.2",
+  "nodeType": "review",
+  "runId": "run_1",
+  "status": "completed",
+  "timestamp": "2026-04-15T18:30:00Z",
+  "summary": "Review ITERATE — 4 criticals: (1) touch targets <44px on mobile, (2) nav links no aria-label when icon-only/collapsed, (3) no focus trap in mobile dialog, (4) focus not returned to hamburger on close. 1 warning: title vs aria-label for collapsed items. Fixing inline.",
+  "verdict": "ITERATE",
+  "artifacts": [
+    {"type": "cli-output", "path": ".harness2/nodes/F3.2/run_1/eval-frontend.md"},
+    {"type": "cli-output", "path": ".harness2/nodes/F3.2/run_1/eval-a11y.md"}
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "version": "1.0",
+  "flowTemplate": "build-verify",
+  "currentNode": "build",
+  "entryNode": "build",
+  "tier": null,
+  "totalSteps": 0,
+  "maxTotalSteps": 25,
+  "maxLoopsPerEdge": 3,
+  "maxNodeReentry": 5,
+  "history": [],
+  "edgeCounts": {},
+  "bypassMode": null,
+  "_written_by": "opc-harness",
+  "_last_modified": "2026-04-18T07:37:21.204Z",
+  "_write_nonce": "0e18cac300df112f",
+  "status": "stopped",
+  "stoppedAt": "2026-04-18T07:37:21.204Z"
+}

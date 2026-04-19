@@ -1,0 +1,34 @@
+
+=== Logged-in [en] ===
+  ✓ OUT-4[en] sidebar nav has "Articles" (got: ['Articles', 'Timeline', 'Shares', 'Articles', 'Timeline', 'Shares'])
+  ✓ OUT-4[en] sidebar nav has "Timeline" (got: ['Articles', 'Timeline', 'Shares', 'Articles', 'Timeline', 'Shares'])
+  ✓ OUT-4[en] sidebar nav has "Shares" (got: ['Articles', 'Timeline', 'Shares', 'Articles', 'Timeline', 'Shares'])
+  ✓ OUT-4[en] logout button == "Logout" (got: 'Logout')
+  ✓ OUT-5[en] footer contains "articles" (got: '0 articles from 0 sessions')
+  ✓ OUT-5[en] footer contains "from" (got: '0 articles from 0 sessions')
+  ✓ OUT-5[en] footer contains "session" (got: '0 articles from 0 sessions')
+  ✓ OUT-3[en] LangToggle has 2 buttons (got 2)
+  ✓ OUT-3[en] aria-pressed correct (zh=false en=true)
+  ↳ saved screenshot-loggedin-en.png
+
+=== Logged-in [zh] ===
+  ✓ OUT-4[zh] sidebar nav has "文章" (got: ['文章', '时间线', '分享', '文章', '时间线', '分享'])
+  ✓ OUT-4[zh] sidebar nav has "时间线" (got: ['文章', '时间线', '分享', '文章', '时间线', '分享'])
+  ✓ OUT-4[zh] sidebar nav has "分享" (got: ['文章', '时间线', '分享', '文章', '时间线', '分享'])
+  ✓ OUT-4[zh] logout button == "退出" (got: '退出')
+  ✓ OUT-5[zh] footer contains "篇文章" (got: '0 篇文章 来自 0 个 session')
+  ✓ OUT-5[zh] footer contains "来自" (got: '0 篇文章 来自 0 个 session')
+  ✓ OUT-5[zh] footer contains "session" (got: '0 篇文章 来自 0 个 session')
+  ✓ OUT-3[zh] LangToggle has 2 buttons (got 2)
+  ✓ OUT-3[zh] aria-pressed correct (zh=true en=false)
+  ↳ saved screenshot-loggedin-zh.png
+  ✓ OUT-1/2 landing[en] title contains "Every AI session" (got: 'Every AI session\ndeserves to be remembered.')
+  ✓ OUT-1/2 landing[zh] title contains "每一次 AI session" (got: '每一次 AI session，\n都值得被记住。')
+
+=== Console errors ===
+  ✓ OUT-6 zero JS/pageerror entries (got 0: [])
+  (filtered 2 expected network/HMR entries)
+
+=== Summary ===
+failures: 0
+ALL OUTCOMES PASS

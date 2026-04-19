@@ -1,2 +1,10 @@
 - **Tick 1** [F1.1] (implement): Extended MarkdownRenderer: tables, strikethrough, nested lists, setext headings, indented code blocks. 16 tests added, all passing. — 2026-04-15T15:22:46.294Z
 - **Tick 2** [F1.2] (review): FAIL — 7 critical: multi-line paragraph merging, indented-code-before-list ordering, setext/HR ambiguity, table false positive, unclosed fence, safeHref design gap — 2026-04-15T15:26:12.275Z
+- **Tick 7** [F3.1] (implement): Sidebar component implemented: desktop collapsible 240→56px, mobile drawer, Projects/Tags/Stats nav sections, localStorage persistence. 72/72 tests passing. — 2026-04-15T15:56:29.965Z
+- **Tick 8** [F3.2] (review): Review ITERATE → fixed inline: focus trap, focus return, aria-label, touch targets 44px, close button focus-visible. All 4 criticals resolved. 72/72 tests passing. commit 828c7b0. — 2026-04-15T16:03:49.848Z
+- **Tick 9** [F2.1] (implement): Share API implemented: POST/GET/LIST/DELETE with bcrypt password hashing, nanoid tokens, Vercel Blob storage, rate limiting, expiry. 107/107 tests passing. — 2026-04-15T16:10:43.223Z
+- **Tick 10** [F2.2] (review): Review FAIL → all 4 security criticals fixed inline. 107/107 tests. commit 3ae81d9. — 2026-04-15T16:17:58.924Z
+- **Tick 11** [F2.3] (implement): Share UI implemented: modal on ArticleReader, public SharePage, SharesManager. 107 tests pass. Commit 8bed60d. — 2026-04-15T23:50:25.873Z
+- **Tick 12** [F2.4] (review): Share UI review PASS — 2 criticals fixed inline (delete confirmation, locked state detection). Commit c672908. — 2026-04-15T23:52:36.657Z
+- **Tick 13** [F5.1] (implement): Mobile CSS: iOS 16px inputs, code block scroll, 44px touch targets, full-width cards, no overflow, landing clamp(), share gate responsive. Commit via agent. — 2026-04-15T23:56:17.741Z
+- **Tick 14** [F5.2] (review): Mobile CSS review — 2 criticals fixed inline (overflow-x scoped to mobile, reader padding). Commit 3a522bd. — 2026-04-16T00:00:09.394Z
