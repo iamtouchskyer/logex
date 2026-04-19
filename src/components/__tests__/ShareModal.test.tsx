@@ -13,6 +13,9 @@ import userEvent from '@testing-library/user-event'
 import { ArticleReader } from '../../pages/ArticleReader'
 
 // Mock the data + auth + router modules
+vi.mock('../../lib/canonical-origin', () => ({
+  getCanonicalOrigin: () => 'https://logex-io.vercel.app',
+}))
 vi.mock('../../lib/data', () => ({
   loadArticle: vi.fn(async () => ({
     slug: 'demo-slug',
@@ -53,7 +56,7 @@ describe('ShareModal — rewrite', () => {
 
   beforeEach(() => {
     fetchSpy.mockReset()
-    fetchSpy.mockResolvedValue(new Response(JSON.stringify({ id: 'abcDEF123', url: 'https://x/share/abcDEF123', expiresAt: new Date(Date.now() + 86400_000).toISOString() }), {
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify({ id: 'abcDEF123', expiresAt: new Date(Date.now() + 86400_000).toISOString() }), {
       status: 201, headers: { 'content-type': 'application/json' },
     }))
   })
@@ -98,6 +101,15 @@ describe('ShareModal — rewrite', () => {
     await openModal()
     await userEvent.click(screen.getByRole('radio', { name: /Custom/i }))
     expect(screen.getByLabelText(/Custom expiry days/i)).toBeInTheDocument()
+  })
+
+  it('success modal displays canonical origin URL (Bug 7 regression)', async () => {
+    await openModal()
+    const checkbox = screen.getByLabelText(/No password/i)
+    await userEvent.click(checkbox)
+    await userEvent.click(screen.getByRole('button', { name: /Create link/i }))
+    const urlInput = await screen.findByDisplayValue(/logex-io\.vercel\.app/)
+    expect((urlInput as HTMLInputElement).value).toBe('https://logex-io.vercel.app/#/share/abcDEF123')
   })
 
   it('5xx HTML response shows human banner (not "Unexpected token")', async () => {

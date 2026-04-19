@@ -8,6 +8,7 @@ import { useAuth } from '../lib/auth'
 import { GRADIENTS, DEFAULT_GRADIENT } from '../lib/gradients'
 import { safeFetch } from '../lib/safeFetch'
 import { generatePassword } from '../lib/passwordGen'
+import { getCanonicalOrigin } from '../lib/canonical-origin'
 
 interface Props {
   slug: string
@@ -104,7 +105,7 @@ function ShareModal({ slug, onClose }: ShareModalProps) {
     if (modalState.status === 'submitting') return
     setModalState({ status: 'submitting' })
 
-    const result = await safeFetch<{ id?: string; url?: string; expiresAt?: string }>(
+    const result = await safeFetch<{ id?: string; expiresAt?: string }>(
       '/api/share',
       {
         method: 'POST',
@@ -124,7 +125,7 @@ function ShareModal({ slug, onClose }: ShareModalProps) {
     }
 
     const json = result.data
-    const shareUrl = json.url ?? `${window.location.origin}/#/share/${json.id}`
+    const shareUrl = `${getCanonicalOrigin()}/#/share/${json.id}`
     setModalState({ status: 'success', url: shareUrl, expiresAt: json.expiresAt ?? '' })
   }
 

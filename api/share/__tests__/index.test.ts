@@ -97,7 +97,7 @@ describe('api/share/index POST (handleCreate)', () => {
     await handler(makeReq('POST', { slug: 'slug-a', expiresInDays: 7 }), res as any)
     expect(res.statusCode).toBe(201)
     expect((res.body as any).id).toBeTruthy()
-    expect((res.body as any).url).toContain('/share/')
+    expect((res.body as any).url).toBeUndefined()
   })
 
   it('all put() calls include allowOverwrite: true', async () => {
