@@ -1,11 +1,37 @@
 {
-  "name": "logex",
-  "private": true,
-  "version": "0.0.0",
+  "name": "@touchskyer/logex",
+  "version": "0.1.0",
   "type": "module",
+  "description": "Write blog-style session papers from a Claude Code session JSONL",
+  "license": "MIT",
+  "author": "touchskyer",
+  "bin": {
+    "logex": "dist/bin/logex.js"
+  },
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist/",
+    "hooks/",
+    "skills/",
+    ".claude-plugin/",
+    "smithery.yaml",
+    "server.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && npm run build:cli",
+    "build:cli": "tsc -p tsconfig.cli.json && node scripts/postbuild-cli.mjs",
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "vitest run && playwright test",
@@ -16,11 +42,14 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "@vercel/blob": "^2.3.3",
     "bcryptjs": "^3.0.3",
+    "commander": "^14.0.3",
     "nanoid": "^5.1.9",
     "react": "^19.2.4",
-    "react-dom": "^19.2.4"
+    "react-dom": "^19.2.4",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.1",
