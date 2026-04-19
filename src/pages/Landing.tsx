@@ -82,15 +82,15 @@ export function Landing({ onLogin, theme, toggleTheme, signedOut }: Props) {
       <footer className="landing__footer">
         <div className="landing__features">
           <div className="landing__feature">
-            <h3>{t('landing.feature1.title')}</h3>
+            <h2>{t('landing.feature1.title')}</h2>
             <p>{t('landing.feature1.body')}</p>
           </div>
           <div className="landing__feature">
-            <h3>{t('landing.feature2.title')}</h3>
+            <h2>{t('landing.feature2.title')}</h2>
             <p>{t('landing.feature2.body')}</p>
           </div>
           <div className="landing__feature">
-            <h3>{t('landing.feature3.title')}</h3>
+            <h2>{t('landing.feature3.title')}</h2>
             <p>{t('landing.feature3.body')}</p>
           </div>
         </div>
