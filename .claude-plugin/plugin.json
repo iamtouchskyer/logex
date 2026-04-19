@@ -1,0 +1,13 @@
+{
+  "name": "logex",
+  "description": "Write blog-style session papers from Claude Code transcripts",
+  "version": "0.1.0",
+  "license": "MIT",
+  "keywords": [
+    "claude-code",
+    "session",
+    "blog",
+    "writing",
+    "logex"
+  ]
+}
