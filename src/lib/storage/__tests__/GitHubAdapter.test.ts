@@ -114,6 +114,87 @@ describe('GitHubAdapter', () => {
     await expect(adapter.loadArticle('nope', 'en')).rejects.toThrow(/Article not found/)
   })
 
+  it('loadArticle() uses index heroImage over body empty string', async () => {
+    let call = 0
+    globalThis.fetch = vi.fn(async () => {
+      call++
+      if (call === 1) {
+        return {
+          status: 200, ok: true,
+          json: async () => ({
+            articles: [{
+              slug: 'hero-test', date: '2026-04-19', project: 'logex', tags: [],
+              primaryLang: 'en', heroImage: 'https://x/y.png',
+              i18n: { en: { title: 'T', summary: 'S', path: 'hero.en.json' } },
+            }],
+            lastUpdated: 'now',
+          }),
+        } as unknown as Response
+      }
+      return {
+        status: 200, ok: true,
+        json: async () => ({ slug: 'hero-test', title: 'T', body: '', heroImage: '', project: 'logex', date: '2026-04-19', duration: '', sessionId: '', tags: [], stats: { entries: 0, messages: 0, chunks: 0 } }),
+      } as unknown as Response
+    }) as unknown as typeof fetch
+    const adapter = new GitHubAdapter()
+    const art = await adapter.loadArticle('hero-test', 'en')
+    expect(art.heroImage).toBe('https://x/y.png')
+  })
+
+  it('loadArticle() index heroImage wins even when body has different URL', async () => {
+    let call = 0
+    globalThis.fetch = vi.fn(async () => {
+      call++
+      if (call === 1) {
+        return {
+          status: 200, ok: true,
+          json: async () => ({
+            articles: [{
+              slug: 'hero-test2', date: '2026-04-19', project: 'logex', tags: [],
+              primaryLang: 'en', heroImage: 'https://x/y.png',
+              i18n: { en: { title: 'T', summary: 'S', path: 'hero2.en.json' } },
+            }],
+            lastUpdated: 'now',
+          }),
+        } as unknown as Response
+      }
+      return {
+        status: 200, ok: true,
+        json: async () => ({ slug: 'hero-test2', title: 'T', body: '', heroImage: 'https://z/w.png', project: 'logex', date: '2026-04-19', duration: '', sessionId: '', tags: [], stats: { entries: 0, messages: 0, chunks: 0 } }),
+      } as unknown as Response
+    }) as unknown as typeof fetch
+    const adapter = new GitHubAdapter()
+    const art = await adapter.loadArticle('hero-test2', 'en')
+    expect(art.heroImage).toBe('https://x/y.png')
+  })
+
+  it('loadArticle() returns undefined heroImage when index has none', async () => {
+    let call = 0
+    globalThis.fetch = vi.fn(async () => {
+      call++
+      if (call === 1) {
+        return {
+          status: 200, ok: true,
+          json: async () => ({
+            articles: [{
+              slug: 'hero-test3', date: '2026-04-19', project: 'logex', tags: [],
+              primaryLang: 'en',
+              i18n: { en: { title: 'T', summary: 'S', path: 'hero3.en.json' } },
+            }],
+            lastUpdated: 'now',
+          }),
+        } as unknown as Response
+      }
+      return {
+        status: 200, ok: true,
+        json: async () => ({ slug: 'hero-test3', title: 'T', body: '', heroImage: 'https://should-be-ignored.png', project: 'logex', date: '2026-04-19', duration: '', sessionId: '', tags: [], stats: { entries: 0, messages: 0, chunks: 0 } }),
+      } as unknown as Response
+    }) as unknown as typeof fetch
+    const adapter = new GitHubAdapter()
+    const art = await adapter.loadArticle('hero-test3', 'en')
+    expect(art.heroImage).toBeUndefined()
+  })
+
   it('loadArticle() falls back to primaryLang when requested lang missing', async () => {
     let call = 0
     globalThis.fetch = vi.fn(async () => {

@@ -174,6 +174,8 @@ export class GitHubAdapter implements StorageAdapter {
     if (!meta) throw new Error(`Article has no content in any language: ${slug}`)
     const url = `/api/articles/${meta.path.split('/').map(encodeURIComponent).join('/')}`
     const article = await fetchJson<SessionArticle>(url, TTL_ARTICLE, `art:${login}:${meta.path}`)
-    return { ...article, heroImage: entry.heroImage ?? article.heroImage }
+    // index.heroImage is the single source of truth (language-independent field).
+    // Body JSONs historically wrote heroImage:"" which poisons the ?? fallback.
+    return { ...article, heroImage: entry.heroImage }
   }
 }
