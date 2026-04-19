@@ -5,6 +5,10 @@
   "description": "Write blog-style session papers from a Claude Code session JSONL",
   "license": "MIT",
   "author": "touchskyer",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iamtouchskyer/logex"
+  },
   "bin": {
     "logex": "dist/bin/logex.js"
   },
