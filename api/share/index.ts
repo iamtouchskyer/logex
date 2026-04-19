@@ -175,7 +175,10 @@ async function handleList(req: VercelRequest, res: VercelResponse): Promise<void
 
   const metas: ShareMeta[] = records
     .filter((r): r is ShareRecord => r !== null)
-    .map(({ id, slug, createdAt, expiresAt, locked }) => ({ id, slug, createdAt, expiresAt, locked }))
+    .map(({ id, slug, createdAt, expiresAt, locked, articleSnapshot }) => {
+      const snap = articleSnapshot as { title?: string } | undefined
+      return { id, slug, title: snap?.title, createdAt, expiresAt, locked }
+    })
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
   res.status(200).json({ shares: metas })

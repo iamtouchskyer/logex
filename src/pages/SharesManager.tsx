@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
+import { getCanonicalOrigin } from '../lib/canonical-origin'
 
 interface ShareItem {
   id: string
   slug: string
+  title?: string
   createdAt: string
   expiresAt: string
   locked: boolean
@@ -25,6 +27,12 @@ function getShareStatus(share: ShareItem): 'locked' | 'expired' | 'active' {
   if (share.locked) return 'locked'
   if (new Date(share.expiresAt) < new Date()) return 'expired'
   return 'active'
+}
+
+/** Prefer snapshot title, fallback to slug with leading YYYY-MM-DD- stripped. */
+function displayTitle(share: ShareItem): string {
+  if (share.title) return share.title
+  return share.slug.replace(/^\d{4}-\d{2}-\d{2}-/, '')
 }
 
 function CopyIcon() {
@@ -118,9 +126,9 @@ export function SharesManager() {
     void loadShares()
   }, [loadShares])
 
-  async function handleDelete(id: string, slug: string) {
+  async function handleDelete(id: string, title: string) {
     if (deletingId) return
-    if (!window.confirm(`Delete share link for "${slug}"? This cannot be undone.`)) return
+    if (!window.confirm(`Delete share link for "${title}"? This cannot be undone.`)) return
     setDeletingId(id)
     try {
       const res = await fetch(`/api/share/${encodeURIComponent(id)}`, {
@@ -145,7 +153,7 @@ export function SharesManager() {
   }
 
   function getShareUrl(id: string): string {
-    return `${window.location.origin}/#/share/${id}`
+    return `${getCanonicalOrigin()}/#/share/${id}`
   }
 
   if (state.status === 'loading') {
@@ -221,13 +229,13 @@ export function SharesManager() {
                   <tr key={share.id} className={`shares-manager__row shares-manager__row--${status}`}>
                     <td className="shares-manager__cell shares-manager__cell--slug">
                       <a href={`#/articles/${share.slug}`} className="shares-manager__slug-link">
-                        {share.slug}
+                        {displayTitle(share)}
                       </a>
                     </td>
                     <td className="shares-manager__cell shares-manager__cell--url">
                       <div className="shares-manager__url-wrap">
                         <span className="shares-manager__url-text" title={url}>{url}</span>
-                        <CopyButton text={url} label={`Copy share URL for ${share.slug}`} />
+                        <CopyButton text={url} label={`Copy share URL for ${displayTitle(share)}`} />
                       </div>
                     </td>
                     <td className="shares-manager__cell">
@@ -247,9 +255,9 @@ export function SharesManager() {
                       <button
                         type="button"
                         className="shares-manager__delete-btn"
-                        onClick={() => void handleDelete(share.id, share.slug)}
+                        onClick={() => void handleDelete(share.id, displayTitle(share))}
                         disabled={deletingId === share.id}
-                        aria-label={`Delete share link for ${share.slug}`}
+                        aria-label={`Delete share link for ${displayTitle(share)}`}
                         title="Delete share link"
                       >
                         {deletingId === share.id ? (

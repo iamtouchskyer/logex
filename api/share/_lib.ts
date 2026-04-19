@@ -34,6 +34,7 @@ export interface ShareIndex {
 export interface ShareMeta {
   id: string
   slug: string
+  title?: string
   createdAt: string
   expiresAt: string
   locked: boolean
