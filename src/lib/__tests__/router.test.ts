@@ -6,7 +6,12 @@ function setHash(h: string) {
   window.location.hash = h
 }
 
+function setPathname(p: string) {
+  window.history.replaceState(null, '', p + window.location.hash)
+}
+
 beforeEach(() => {
+  window.history.replaceState(null, '', '/')
   window.location.hash = ''
   localStorage.clear()
 })
@@ -90,6 +95,28 @@ describe('parseHash', () => {
     const r = parseHash()
     expect(r.path).toBe('/share/:id')
     expect(r.params.id).toBe('abc123')
+  })
+
+  it('bare-path /share/:id (no hash) resolves to share route', () => {
+    setPathname('/share/abc')
+    const r = parseHash()
+    expect(r.path).toBe('/share/:id')
+    expect(r.params.id).toBe('abc')
+  })
+
+  it('bare-path /share/:id/extra does NOT match share route', () => {
+    setPathname('/share/abc/extra')
+    const r = parseHash()
+    expect(r.path).not.toBe('/share/:id')
+  })
+
+  it('hash wins over pathname when both point at share-like URLs', () => {
+    setPathname('/share/bar')
+    setHash('#/zh/articles/foo')
+    const r = parseHash()
+    expect(r.path).toBe('/articles/:slug')
+    expect(r.params.slug).toBe('foo')
+    expect(r.lang).toBe('zh')
   })
 
   it('persists lang to localStorage', () => {

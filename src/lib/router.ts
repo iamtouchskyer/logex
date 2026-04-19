@@ -34,7 +34,22 @@ export function splitLangPrefix(hash: string): { lang: Lang | null; rest: string
 }
 
 export function parseHash(): Route {
-  const hash = window.location.hash.slice(1) || '/'
+  const rawHash = window.location.hash.slice(1)
+
+  // Bare-path share URLs (e.g. https://site/share/abc with no `#`) typically
+  // come from email/social/copy-paste where the fragment is stripped. When
+  // the hash is empty, also inspect pathname for a /share/:id match so the
+  // page renders publicly instead of falling through to the auth-gated home.
+  // Hash takes precedence when present — in-app SPA nav is always via hash.
+  if (!rawHash) {
+    const pathname = typeof window !== 'undefined' ? window.location.pathname : ''
+    const pathShareMatch = pathname.match(/^\/share\/([^/]+)$/)
+    if (pathShareMatch) {
+      return { path: '/share/:id', params: { id: pathShareMatch[1] }, lang: detectInitialLang() }
+    }
+  }
+
+  const hash = rawHash || '/'
 
   // Share route is lang-independent — keep it at top level
   const shareMatch = hash.match(/^\/share\/([^/]+)$/)
