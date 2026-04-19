@@ -125,7 +125,7 @@ describe('loadAllArticles', () => {
       path: '2026/04/10/legacy-1.json',
     }
     mockAdapter.loadIndex.mockResolvedValueOnce({
-      articles: [legacyEntry] as any,
+      articles: [legacyEntry] as unknown as ArticleIndex['articles'],
       lastUpdated: '2026-04-15',
     })
 

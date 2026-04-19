@@ -19,7 +19,7 @@ program
 program
   .command("write [jsonl]")
   .description("Write a session paper (currently routed through the /logex skill)")
-  .action((_jsonl?: string) => {
+  .action(() => {
     process.stdout.write(
       "Run /logex in Claude Code for article writing.\n",
     );

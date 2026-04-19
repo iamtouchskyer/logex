@@ -25,7 +25,7 @@
  *   npx tsx scripts/backfill-i18n.ts                # full run
  */
 import { readFileSync, writeFileSync, renameSync, existsSync } from 'fs'
-import { join, dirname } from 'path'
+import { join } from 'path'
 import { homedir } from 'os'
 import Anthropic from '@anthropic-ai/sdk'
 import { buildTranslateRewritePrompt, toTranslatable } from '../src/pipeline/prompt'
@@ -86,8 +86,8 @@ interface NewEntry {
   i18n: Partial<Record<Lang, LangMeta>>
 }
 
-function isNewShape(e: any): boolean {
-  return e && typeof e === 'object' && 'i18n' in e && e.i18n
+function isNewShape(e: unknown): boolean {
+  return !!e && typeof e === 'object' && 'i18n' in e && !!(e as Record<string, unknown>).i18n
 }
 
 async function translateArticle(source: SessionArticle): Promise<{
@@ -140,7 +140,7 @@ async function main() {
     console.error(`index.json not found at ${indexPath}`)
     process.exit(1)
   }
-  const index: { articles: any[]; lastUpdated: string } = JSON.parse(
+  const index: { articles: Record<string, unknown>[]; lastUpdated: string } = JSON.parse(
     readFileSync(indexPath, 'utf-8'),
   )
 

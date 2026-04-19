@@ -344,7 +344,7 @@ function execute(
       heroImage: preservedHeroImage,
       chunkIndices: article.chunkIndices,
       duration: preservedDuration,
-      stats: preservedStats as any,
+      stats: preservedStats as Record<string, unknown>,
       primaryLang,
       i18n: i18nMap,
     }

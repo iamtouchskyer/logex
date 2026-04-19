@@ -184,7 +184,6 @@ describe('Inline combo: bold + italic + link', () => {
   })
 
   it('safeHref blocks javascript: links', () => {
-    // eslint-disable-next-line no-script-url
     const input = `[evil](javascript:alert(1))`
     const html = md(input)
     expect(html).toContain('href="#"')

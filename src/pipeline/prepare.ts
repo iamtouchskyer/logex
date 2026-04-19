@@ -82,7 +82,8 @@ function main() {
   console.error('Extracting rich stats...')
   const richStats = extractRichStats(jsonlPath)
   if (richStats) {
-    console.error(`  Tokens: ${(richStats as any).tokens?.total?.toLocaleString() ?? '?'} | Cost: $${(richStats as any).cost_estimate?.total_cost ?? '?'} | Tools: ${(richStats as any).tool_calls?.total ?? '?'}`)
+    const rs = richStats as Record<string, Record<string, unknown>>
+    console.error(`  Tokens: ${(rs.tokens?.total as number)?.toLocaleString() ?? '?'} | Cost: $${rs.cost_estimate?.total_cost ?? '?'} | Tools: ${rs.tool_calls?.total ?? '?'}`)
   }
 
   const meta = {

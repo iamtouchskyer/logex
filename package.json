@@ -38,7 +38,8 @@
     "test:unit": "vitest run",
     "test:e2e": "playwright test --grep-invert a11y",
     "test:a11y": "playwright test --grep a11y",
-    "extract": "npx tsx src/pipeline/extract.ts"
+    "extract": "npx tsx src/pipeline/extract.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",

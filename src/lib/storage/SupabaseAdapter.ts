@@ -7,7 +7,7 @@ export class SupabaseAdapter implements StorageAdapter {
     throw new Error('SupabaseAdapter not implemented yet')
   }
 
-  async loadArticle(_slug: string, _lang: Lang): Promise<SessionArticle> {
+  async loadArticle(_slug: string, _lang: Lang): Promise<SessionArticle> { // eslint-disable-line @typescript-eslint/no-unused-vars
     throw new Error('SupabaseAdapter not implemented yet')
   }
 }

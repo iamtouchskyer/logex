@@ -27,17 +27,17 @@ describe('publish.ts', () => {
     }
   })
 
-  function writeIndex(index: { articles: any[]; lastUpdated: string }) {
+  function writeIndex(index: { articles: unknown[]; lastUpdated: string }) {
     writeFileSync(join(dataDir, 'index.json'), JSON.stringify(index))
   }
 
-  function writeArticles(articles: any[]): string {
+  function writeArticles(articles: unknown[]): string {
     const p = join(dataDir, 'new-articles.json')
     writeFileSync(p, JSON.stringify(articles))
     return p
   }
 
-  function writeDecisions(decisions: any[]): string {
+  function writeDecisions(decisions: unknown[]): string {
     const p = join(dataDir, 'decisions.json')
     writeFileSync(p, JSON.stringify({ decisions }))
     return p

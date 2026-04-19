@@ -383,6 +383,7 @@ export function ArticleReader({ slug }: Props) {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     setError(null)
     loadArticle(slug, lang)
@@ -395,7 +396,10 @@ export function ArticleReader({ slug }: Props) {
   }, [slug, lang])
 
   // Reset hero image error when article changes
-  useEffect(() => { setHeroImgError(false) }, [slug])
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHeroImgError(false)
+  }, [slug])
 
   if (loading) {
     return (

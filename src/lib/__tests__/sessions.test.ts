@@ -3,8 +3,8 @@ import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 
 const mocks = vi.hoisted(() => ({
-  existsSync: vi.fn((_p: unknown): boolean => false),
-  readFileSync: vi.fn((_p: unknown, _e?: unknown): string => ""),
+  existsSync: vi.fn((): boolean => false),
+  readFileSync: vi.fn((): string => ""),
   readdirSync: vi.fn((): string[] => []),
   statSync: vi.fn(),
 }));

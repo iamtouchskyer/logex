@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 // One-off: translate the 3 new-shape entries that backfill skipped.
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { homedir } from 'os'
 import Anthropic from '@anthropic-ai/sdk'
@@ -22,7 +22,7 @@ async function translate(source: SessionArticle) {
     max_tokens: 8192,
     messages: [{ role: 'user', content: prompt }],
   })
-  const text = resp.content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('\n')
+  const text = resp.content.filter((b: { type: string }) => b.type === 'text').map((b: { text: string }) => b.text).join('\n')
   const cleaned = text.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '').trim()
   const first = cleaned.indexOf('{'), last = cleaned.lastIndexOf('}')
   return JSON.parse(cleaned.slice(first, last + 1))
@@ -33,7 +33,7 @@ async function main() {
   const idx = JSON.parse(readFileSync(idxPath, 'utf-8'))
 
   for (const slug of SLUGS) {
-    const entry = idx.articles.find((a: any) => a.slug === slug)
+    const entry = idx.articles.find((a: { slug: string }) => a.slug === slug)
     if (!entry) { console.error(`${slug}: not in index`); continue }
     const zhPath = entry.i18n.zh.path
     const enPath = zhPath.replace(/\.zh\.json$/, '.en.json')

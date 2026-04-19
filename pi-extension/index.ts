@@ -15,7 +15,7 @@ export const meta: LogexExtensionMeta = {
   version: '0.1.0',
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export default function logexExtension(_pi: any): void {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export default function logexExtension(_pi: unknown): void {
   // Skeleton — tool and command registration will land in a follow-up.
 }

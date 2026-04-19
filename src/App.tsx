@@ -50,11 +50,14 @@ function App() {
 
   useEffect(() => {
     if (!user) return
+    let cancelled = false
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     loadAllArticles(route.lang)
-      .then(setArticles)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false))
+      .then((data) => { if (!cancelled) setArticles(data) })
+      .catch((e) => { if (!cancelled) setError(e.message) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [user, route.lang])
 
   const handleToggleCollapse = useCallback(() => {
@@ -116,8 +119,9 @@ function App() {
 
   // Close mobile drawer on route change
   useEffect(() => {
-    setMobileDrawerOpen(false)
-  }, [route.path])
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (mobileDrawerOpen) setMobileDrawerOpen(false)
+  }, [route.path, mobileDrawerOpen])
 
   const sessionCount = useMemo(() => {
     const set = new Set(articles.map((a) => a.sessionId).filter(Boolean))

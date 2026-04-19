@@ -121,8 +121,8 @@ export async function detectImageX(
 /** Attempt image-x generation. Currently a stub that signals "unavailable"
  *  by throwing — real integration will spawn the skill's CLI. */
 export async function generateWithImageX(
-  _slug: string,
-  _title: string,
+  _slug: string, // eslint-disable-line @typescript-eslint/no-unused-vars
+  _title: string, // eslint-disable-line @typescript-eslint/no-unused-vars
 ): Promise<HeroImage> {
   throw new Error('image-x generation not yet implemented')
 }
