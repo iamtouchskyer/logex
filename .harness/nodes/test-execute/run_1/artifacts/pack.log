@@ -1,0 +1,38 @@
+npm notice
+npm notice 📦  @touchskyer/logex@0.1.0
+npm notice Tarball Contents
+npm notice 410B .claude-plugin/marketplace.json
+npm notice 239B .claude-plugin/plugin.json
+npm notice 1.1kB LICENSE
+npm notice 11.4kB README.md
+npm notice 46.1kB dist/assets/index-BvE78yhN.css
+npm notice 259.2kB dist/assets/index-C5u0Uzxv.js
+npm notice 31B dist/bin/logex.d.ts
+npm notice 1.6kB dist/bin/logex.js
+npm notice 450B dist/favicon.svg
+npm notice 373B dist/index.d.ts
+npm notice 1.2kB dist/index.html
+npm notice 143B dist/index.js
+npm notice 486B dist/lib/sessions.d.ts
+npm notice 2.4kB dist/lib/sessions.js
+npm notice 181B dist/mcp/server.d.ts
+npm notice 2.5kB dist/mcp/server.js
+npm notice 2.7kB dist/pipeline/types.d.ts
+npm notice 45B dist/pipeline/types.js
+npm notice 243B hooks/hooks.json
+npm notice 240B hooks/session-end.sh
+npm notice 2.2kB package.json
+npm notice 586B server.json
+npm notice 7.1kB skills/logex/skill.md
+npm notice 195B smithery.yaml
+npm notice Tarball Details
+npm notice name: @touchskyer/logex
+npm notice version: 0.1.0
+npm notice filename: touchskyer-logex-0.1.0.tgz
+npm notice package size: 97.7 kB
+npm notice unpacked size: 341.0 kB
+npm notice shasum: 2816c0f30ac872faca02bee56de8bb391a7975da
+npm notice integrity: sha512-GiV5TwwSRyRP9[...]tRQSs+TGMSVgw==
+npm notice total files: 24
+npm notice
+touchskyer-logex-0.1.0.tgz

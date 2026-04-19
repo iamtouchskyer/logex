@@ -3,8 +3,11 @@ import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 
 const mocks = vi.hoisted(() => ({
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   existsSync: vi.fn((_p?: unknown): boolean => false),
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   readFileSync: vi.fn((_p?: unknown, _o?: unknown): string => ""),
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   readdirSync: vi.fn((_p?: unknown): string[] => []),
   statSync: vi.fn(),
 }));

@@ -1,12 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import crypto from 'crypto'
-
-function signToken(payload: Record<string, unknown>, secret: string): string {
-  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url')
-  const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
-  const signature = crypto.createHmac('sha256', secret).update(`${header}.${body}`).digest('base64url')
-  return `${header}.${body}.${signature}`
-}
+import { signSession } from '../_session.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { code, state } = req.query as { code?: string; state?: string }
@@ -22,7 +16,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return acc
   }, {} as Record<string, string>)
 
-  if (cookies.oauth_state !== state) {
+  const expectedState = cookies.oauth_state ?? ''
+  // Constant-time compare (state is single-use random, impact negligible, but cheap)
+  if (expectedState.length === 0 || expectedState.length !== state.length ||
+      !crypto.timingSafeEqual(Buffer.from(expectedState), Buffer.from(state))) {
     return res.status(403).json({ error: 'State mismatch' })
   }
 
@@ -52,20 +49,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Failed to get user info' })
   }
 
-  // Check allowed users
-  const allowed = (process.env.ALLOWED_GITHUB_USERS ?? '').split(',').map(s => s.trim().toLowerCase())
-  if (allowed.length > 0 && allowed[0] !== '' && !allowed.includes(user.login.toLowerCase())) {
-    return res.status(403).json({ error: `User ${user.login} is not authorized` })
+  // Create signed session token — includes access_token so server-side
+  // endpoints can proxy to the user's data repo. Token stays in httpOnly cookie,
+  // never reaches browser JS.
+  let token: string
+  try {
+    token = signSession({
+      login: user.login,
+      name: user.name,
+      avatar: user.avatar_url,
+      access_token: tokenData.access_token,
+      exp: Math.floor(Date.now() / 1000) + 7 * 24 * 3600, // 7 days
+    })
+  } catch (e) {
+    console.error('FATAL: cannot sign session —', e)
+    return res.status(500).json({ error: 'Server misconfiguration' })
   }
-
-  // Create signed session token
-  const secret = process.env.SESSION_SECRET ?? 'logex-dev-secret'
-  const token = signToken({
-    login: user.login,
-    name: user.name,
-    avatar: user.avatar_url,
-    exp: Math.floor(Date.now() / 1000) + 7 * 24 * 3600, // 7 days
-  }, secret)
 
   // Set session cookie and clear state cookie
   const isLocal = !process.env.VERCEL_URL

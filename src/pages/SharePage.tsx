@@ -24,7 +24,8 @@ export function SharePage({ id }: Props) {
   const [password, setPassword] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Probe: try fetching without password. Public shares succeed; protected shares return 400.
+  // Probe: GET the share. Public shares return 200; password-protected shares
+  // return 401 PASSWORD_REQUIRED, prompting us to POST the password in body.
   useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -34,7 +35,7 @@ export function SharePage({ id }: Props) {
         setState({ status: 'success', title: result.data.article.title, body: result.data.article.body, slug: result.data.slug })
         return
       }
-      if (result.status === 400) { setState({ status: 'prompt' }); return }
+      if (result.status === 401) { setState({ status: 'prompt' }); return }
       if (result.status === 410) { setState({ status: 'expired' }); return }
       if (result.status === 404) { setState({ status: 'not_found' }); return }
       if (result.status === 403 && result.error.toLowerCase().includes('lock')) { setState({ status: 'locked' }); return }
@@ -55,8 +56,13 @@ export function SharePage({ id }: Props) {
     if (!password.trim()) return
     setState({ status: 'loading' })
 
-    const params = new URLSearchParams({ password })
-    const result = await safeFetch<ShareResponse>(`/api/share/${encodeURIComponent(id)}?${params}`)
+    // POST password in JSON body — never in URL. Same-origin only.
+    const result = await safeFetch<ShareResponse>(`/api/share/${encodeURIComponent(id)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ password }),
+    })
 
     if (result.ok) {
       setState({ status: 'success', title: result.data.article.title, body: result.data.article.body, slug: result.data.slug })

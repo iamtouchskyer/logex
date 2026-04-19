@@ -3,7 +3,7 @@
  * Tests password hashing, token generation, expiry, rate limiting, and auth extraction.
  * No HTTP handlers, no Vercel Blob — all pure logic.
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import {
   generateId,
   hashPassword,
@@ -319,5 +319,45 @@ describe('ShareRecord — no-password (public) variant', () => {
   it('verifyPassword is never called for null-hash records (caller short-circuits)', async () => {
     // Sanity: hashPassword fails on null, so the API path MUST short-circuit first
     await expect(hashPassword(null as unknown as string)).rejects.toBeDefined()
+  })
+})
+
+// ───────────────────────────────────────────
+// getAuthUserFull — exposes access_token
+// ───────────────────────────────────────────
+import { getAuthUserFull } from '../../../api/share/_lib'
+
+describe('getAuthUserFull', () => {
+  function sign(payload: Record<string, unknown>, secret = 'test-secret'): string {
+    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url')
+    const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
+    const sig = crypto.createHmac('sha256', secret).update(`${header}.${body}`).digest('base64url')
+    return `${header}.${body}.${sig}`
+  }
+
+  afterEach(() => { delete process.env.SESSION_SECRET })
+
+  it('returns the access_token field alongside login', () => {
+    process.env.SESSION_SECRET = 'test-secret'
+    const token = sign({ login: 'alice', access_token: 'ghu_xxx', exp: Math.floor(Date.now() / 1000) + 60 })
+    const full = getAuthUserFull(`session=${token}`)
+    expect(full?.login).toBe('alice')
+    expect(full?.access_token).toBe('ghu_xxx')
+  })
+
+  it('returns null without cookie', () => {
+    expect(getAuthUserFull(undefined)).toBeNull()
+  })
+
+  it('returns null when signature is forged', () => {
+    process.env.SESSION_SECRET = 'test-secret'
+    const token = sign({ login: 'alice' }, 'wrong-secret')
+    expect(getAuthUserFull(`session=${token}`)).toBeNull()
+  })
+
+  it('returns null when exp is in the past', () => {
+    process.env.SESSION_SECRET = 'test-secret'
+    const token = sign({ login: 'alice', exp: 1 })
+    expect(getAuthUserFull(`session=${token}`)).toBeNull()
   })
 })

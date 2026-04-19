@@ -1,0 +1,12 @@
+{
+  "nodeId": "test-design",
+  "nodeType": "review",
+  "runId": "run_1",
+  "status": "completed",
+  "verdict": "PASS",
+  "timestamp": "2026-04-19T07:35:00Z",
+  "summary": "20 test cases designed (12 unit, 5 API integration, 3 E2E-deferred) covering OUT-1..OUT-6, regressions B1/B2/B3/B4, security S2/S4, and a11y on EmptyOnboarding. E2E cases T18/T19/T20 deferred to task #19 (deploy-and-verify) where real vercel dev + Playwright are available. All 17 non-deferred cases are immediately executable against existing vitest suites.",
+  "artifacts": [
+    { "type": "test-plan", "path": ".harness/nodes/test-design/run_1/test-plan.md" }
+  ]
+}

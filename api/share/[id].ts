@@ -34,52 +34,15 @@ async function writeBlob(key: string, data: unknown): Promise<void> {
   await put(key, JSON.stringify(data), { access: 'private', contentType: 'application/json', addRandomSuffix: false })
 }
 
-// ---------- fetch article from GitHub data repo ----------
-
-async function fetchArticle(slug: string): Promise<unknown | null> {
-  const owner = process.env.GITHUB_DATA_OWNER
-  const repo = process.env.GITHUB_DATA_REPO
-  const token = process.env.GITHUB_TOKEN
-
-  if (!owner || !repo) return null
-
-  // Use jsDelivr CDN (GFW-friendly) for public repos, GitHub API for private
-  if (!token) {
-    // Public repo — jsDelivr
-    const indexUrl = `https://cdn.jsdelivr.net/gh/${owner}/${repo}@main/index.json`
-    const idxRes = await fetch(indexUrl)
-    if (!idxRes.ok) return null
-    const idx = await idxRes.json() as { articles?: Array<{ slug: string; path: string }> }
-    const entry = idx.articles?.find((a) => a.slug === slug)
-    if (!entry) return null
-    const articleUrl = `https://cdn.jsdelivr.net/gh/${owner}/${repo}@main/${entry.path}`
-    const artRes = await fetch(articleUrl)
-    if (!artRes.ok) return null
-    return artRes.json()
-  }
-
-  // Private repo — GitHub API
-  const headers: Record<string, string> = {
-    Accept: 'application/vnd.github+json',
-    Authorization: `Bearer ${token}`,
-  }
-  const indexUrl = `https://api.github.com/repos/${owner}/${repo}/contents/index.json`
-  const idxRes = await fetch(indexUrl, { headers })
-  if (!idxRes.ok) return null
-  const idx = await idxRes.json() as { articles?: Array<{ slug: string; path: string }> }
-  const entry = idx.articles?.find((a) => a.slug === slug)
-  if (!entry) return null
-  const articleUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${entry.path}`
-  const artRes = await fetch(articleUrl, { headers })
-  if (!artRes.ok) return null
-  return artRes.json()
-}
-
 // ---------- handlers ----------
 
+/**
+ * GET = public no-password shares only. If the share is password-protected,
+ * return 401 PASSWORD_REQUIRED so the client issues a POST with the password
+ * in the JSON body (never the URL).
+ */
 async function handleGet(req: VercelRequest, res: VercelResponse): Promise<void> {
   const id = req.query.id as string
-  const password = req.query.password as string | undefined
 
   if (!id || !isValidId(id)) {
     res.status(400).json({ error: 'Invalid share id' })
@@ -104,46 +67,97 @@ async function handleGet(req: VercelRequest, res: VercelResponse): Promise<void>
 
   // No-password share — skip verification, return article directly
   if (record.passwordHash === null) {
-    const article = await fetchArticle(record.slug)
-    res.status(200).json({ article, slug: record.slug })
+    res.status(200).json({ article: record.articleSnapshot ?? null, slug: record.slug })
     return
   }
 
+  // Password-protected — refuse to read password from URL (leaks to logs/Referer).
+  // Client must POST password in body.
+  res.status(401).json({ error: 'PASSWORD_REQUIRED' })
+}
+
+/**
+ * POST = password submission for password-protected shares.
+ * Body: `{ "password": string }`. Returns article JSON on success.
+ * Same-origin only (CORS above restricts). Never accepts password via query.
+ */
+async function handlePost(req: VercelRequest, res: VercelResponse): Promise<void> {
+  const id = req.query.id as string
+  if (!id || !isValidId(id)) {
+    res.status(400).json({ error: 'Invalid share id' })
+    return
+  }
+
+  // Parse body — Vercel auto-parses application/json but guard for raw strings too.
+  let password: string | undefined
+  const body = req.body as unknown
+  if (typeof body === 'string') {
+    try {
+      const parsed = JSON.parse(body) as { password?: unknown }
+      if (typeof parsed.password === 'string') password = parsed.password
+    } catch { /* ignore */ }
+  } else if (body && typeof body === 'object' && 'password' in body) {
+    const p = (body as { password?: unknown }).password
+    if (typeof p === 'string') password = p
+  }
+
   if (!password) {
-    res.status(400).json({ error: 'Missing password query param' })
+    res.status(400).json({ error: 'Missing password in body' })
+    return
+  }
+
+  const record = await readBlob<ShareRecord>(shareKey(id))
+  if (!record) {
+    res.status(404).json({ error: 'Share not found' })
+    return
+  }
+
+  if (isExpired(record.expiresAt)) {
+    res.status(410).json({ error: 'Share expired' })
+    return
+  }
+
+  if (isLocked(record)) {
+    res.status(403).json({ error: 'Share locked due to too many failed attempts' })
+    return
+  }
+
+  // Public share — POST isn't required; just return it.
+  if (record.passwordHash === null) {
+    res.status(200).json({ article: record.articleSnapshot ?? null, slug: record.slug })
     return
   }
 
   const valid = await verifyPassword(password, record.passwordHash)
   if (!valid) {
-    // Increment attempts and persist
     const updated = incrementAttempts(record)
     await writeBlob(shareKey(id), updated)
     res.status(403).json({ error: 'Wrong password' })
     return
   }
 
-  // Fetch the article
-  const article = await fetchArticle(record.slug)
-
-  res.status(200).json({ article, slug: record.slug })
+  res.status(200).json({ article: record.articleSnapshot ?? null, slug: record.slug })
 }
 
 async function handleDelete(req: VercelRequest, res: VercelResponse): Promise<void> {
-  // CSRF protection: require request to originate from same host
+  // CSRF protection: require request to originate from same host.
+  // Tightened: mutating methods REQUIRE Origin header — requests without one
+  // (some fetch clients) are rejected too.
   const origin = req.headers.origin as string | undefined
   const host = req.headers.host as string | undefined
-  if (origin && host) {
-    try {
-      const originHost = new URL(origin).host
-      if (originHost !== host) {
-        res.status(403).json({ error: 'CSRF check failed' })
-        return
-      }
-    } catch {
+  if (!origin || !host) {
+    res.status(403).json({ error: 'CSRF check failed' })
+    return
+  }
+  try {
+    const originHost = new URL(origin).host
+    if (originHost !== host) {
       res.status(403).json({ error: 'CSRF check failed' })
       return
     }
+  } catch {
+    res.status(403).json({ error: 'CSRF check failed' })
+    return
   }
 
   const login = getAuthUser(req.headers.cookie)
@@ -169,7 +183,6 @@ async function handleDelete(req: VercelRequest, res: VercelResponse): Promise<vo
     return
   }
 
-  // Delete blob — use pathname directly (works for both public and private stores)
   try {
     await del(shareKey(id))
   } catch (e) {
@@ -178,7 +191,6 @@ async function handleDelete(req: VercelRequest, res: VercelResponse): Promise<vo
     return
   }
 
-  // Remove from user index
   try {
     const idxKey = indexKey(login)
     const idx = await readBlob<ShareIndex>(idxKey)
@@ -187,7 +199,6 @@ async function handleDelete(req: VercelRequest, res: VercelResponse): Promise<vo
       await writeBlob(idxKey, updated)
     }
   } catch (e) {
-    // Non-fatal: share is deleted, index cleanup failed. Log and continue.
     console.error('Failed to update share index after delete:', id, e)
   }
 
@@ -199,11 +210,15 @@ async function handleDelete(req: VercelRequest, res: VercelResponse): Promise<vo
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
   const id = req.query.id as string
 
-  // CORS — GET is public (read-only share access), DELETE is same-origin only
+  // CORS policy:
+  //   - GET (no-password read) is safe to expose cross-origin: no secrets, no state change.
+  //   - POST (password submission) and DELETE are same-origin only — no
+  //     Access-Control-Allow-Origin header. Browsers will block cross-origin
+  //     attempts; server-to-server callers must set Origin matching host.
   if (req.method === 'GET') {
     res.setHeader('Access-Control-Allow-Origin', '*')
   }
-  res.setHeader('Access-Control-Allow-Methods', 'GET, DELETE, OPTIONS')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
   res.setHeader('Content-Type', 'application/json')
 
@@ -220,6 +235,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
   try {
     if (req.method === 'GET') {
       return await handleGet(req, res)
+    }
+
+    if (req.method === 'POST') {
+      return await handlePost(req, res)
     }
 
     if (req.method === 'DELETE') {

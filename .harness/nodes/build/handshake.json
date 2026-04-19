@@ -1,0 +1,41 @@
+{
+  "nodeId": "build",
+  "nodeType": "build",
+  "runId": "run_2",
+  "status": "completed",
+  "verdict": "PASS",
+  "summary": "Fixed 4 🔴 blockers + 2 🟡 from code-review run_1. (B1) Centralized SESSION_SECRET sign/verify in api/_session.ts — prod now throws if unset, non-prod falls back; callback/me/share all route through it so issuer and verifiers cannot drift. (B2) GitHubAdapter cache keys now prefixed with user login resolved via /api/auth/me; setUserScope() clears cache on identity change; useAuth.logout() calls clearMemCache(). (B3) OAuth scope dropped from `read:user repo` → `read:user`; EmptyOnboarding documents `gh repo create --public`; 403 INSUFFICIENT_SCOPE now carries a friendly message pointing at repo visibility. (B4) Share password moved from URL query to POST JSON body; GET on password-protected share returns 401 PASSWORD_REQUIRED; Access-Control-Allow-Origin:* only on GET (public read); SharePage frontend POSTs on submit. (S2) OAuth state uses crypto.randomBytes(16).toString('hex'). (S4) logout cookie attrs match login (HttpOnly + SameSite=Lax + Secure-in-prod). All 310 unit tests pass; lint + typecheck clean.",
+  "timestamp": "2026-04-19T07:30:00Z",
+  "artifacts": [
+    { "type": "code", "path": "api/_session.ts", "change": "new" },
+    { "type": "code", "path": "api/__tests__/_session.test.ts", "change": "new" },
+    { "type": "code", "path": "api/auth/callback.ts", "change": "modified" },
+    { "type": "code", "path": "api/auth/me.ts", "change": "modified" },
+    { "type": "code", "path": "api/auth/login.ts", "change": "modified" },
+    { "type": "code", "path": "api/auth/logout.ts", "change": "modified" },
+    { "type": "code", "path": "api/auth/__tests__/login.test.ts", "change": "new" },
+    { "type": "code", "path": "api/auth/__tests__/logout.test.ts", "change": "new" },
+    { "type": "code", "path": "api/share/_lib.ts", "change": "modified" },
+    { "type": "code", "path": "api/share/[id].ts", "change": "modified" },
+    { "type": "code", "path": "api/share/__tests__/id.test.ts", "change": "new" },
+    { "type": "code", "path": "api/articles/_lib.ts", "change": "modified" },
+    { "type": "code", "path": "src/lib/auth.ts", "change": "modified" },
+    { "type": "code", "path": "src/lib/storage/GitHubAdapter.ts", "change": "modified" },
+    { "type": "code", "path": "src/lib/storage/__tests__/GitHubAdapter.test.ts", "change": "modified" },
+    { "type": "code", "path": "src/pages/SharePage.tsx", "change": "modified" },
+    { "type": "code", "path": "src/components/EmptyOnboarding.tsx", "change": "modified" }
+  ],
+  "openIssues": [
+    { "id": "S3", "severity": "medium", "title": "No per-user rate-limit on /api/articles/*", "note": "Deferred — needs Vercel KV wiring, out of scope for run_2." },
+    { "id": "backend-#4", "severity": "medium", "title": "Error taxonomy: 401 (revoked) and 403 (rate-limit) still collapse to INSUFFICIENT_SCOPE", "note": "Partial mitigation: 403 now carries friendlier message. Full branching on x-ratelimit-remaining deferred." },
+    { "id": "backend-#5", "severity": "medium", "title": "access_token stored plaintext inside JWT (base64-only, not encrypted)", "note": "Deferred — requires AES-GCM or server-side session store. Cookie is httpOnly+Secure, so leak surface is proxy/log misconfig only." },
+    { "id": "backend-#6", "severity": "low", "title": "Share creation does not run isSafeArticlePath on user-supplied articlePath", "note": "Not yet addressed in run_2; defense-in-depth, contained to user's own repo." }
+  ],
+  "verification": {
+    "lint": "0 errors",
+    "typecheck": "0 errors",
+    "unitTests": "310 passed (up from 295 in run_1)",
+    "grep_logex-dev-secret": "only in api/_session.ts definition + test fixture",
+    "grep_Math.random_api": "0 call sites (only in comments/tests)"
+  }
+}

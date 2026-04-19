@@ -10,9 +10,10 @@ import { Sidebar } from './components/Sidebar'
 import { ArticlesList } from './pages/ArticlesList'
 import { ArticleReader } from './pages/ArticleReader'
 import { Timeline } from './pages/Timeline'
-import { Landing } from './pages/Landing'
 import { SharesManager } from './pages/SharesManager'
 import { SharePage } from './pages/SharePage'
+import { EmptyOnboarding } from './components/EmptyOnboarding'
+import { RepoNotFoundError, UnauthenticatedError } from './lib/storage/GitHubAdapter'
 import { useT } from './lib/i18n'
 
 const SIDEBAR_COLLAPSED_KEY = 'logex-sidebar-collapsed'
@@ -30,12 +31,14 @@ function HamburgerIcon() {
 function App() {
   const route = useRoute()
   const { theme, toggle } = useTheme()
-  const { user, loading: authLoading, login, logout } = useAuth()
+  const { user, loading: authLoading, logout } = useAuth()
   const t = useT()
 
   const [articles, setArticles] = useState<ArticleMeta[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [repoMissing, setRepoMissing] = useState(false)
+  const [loadAttempt, setLoadAttempt] = useState(0)
 
   // Sidebar state
   const hamburgerRef = useRef<HTMLButtonElement>(null)
@@ -53,12 +56,26 @@ function App() {
     let cancelled = false
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
+    setError(null)
+    setRepoMissing(false)
     loadAllArticles(route.lang)
       .then((data) => { if (!cancelled) setArticles(data) })
-      .catch((e) => { if (!cancelled) setError(e.message) })
+      .catch((e) => {
+        if (cancelled) return
+        if (e instanceof RepoNotFoundError) {
+          setRepoMissing(true)
+          return
+        }
+        if (e instanceof UnauthenticatedError) {
+          // Session expired mid-session — redirect to re-auth
+          window.location.href = '/api/auth/login'
+          return
+        }
+        setError(e?.message ?? 'Failed to load articles')
+      })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [user, route.lang])
+  }, [user, route.lang, loadAttempt])
 
   const handleToggleCollapse = useCallback(() => {
     setSidebarCollapsed((prev) => {
@@ -128,6 +145,17 @@ function App() {
     return set.size
   }, [articles])
 
+  // Auto-redirect unauthenticated users on non-share routes. Runs as a side
+  // effect, not during render (lint: react-hooks/immutability).
+  useEffect(() => {
+    if (authLoading) return
+    if (user) return
+    if (route.path === '/share/:id') return
+    if (typeof window !== 'undefined') {
+      window.location.href = '/api/auth/login'
+    }
+  }, [authLoading, user, route.path])
+
   // Auth loading state
   if (authLoading) {
     return (
@@ -144,9 +172,43 @@ function App() {
     return <SharePage id={route.params.id} />
   }
 
-  // Not authenticated — show landing page
+  // Not authenticated on a non-share route — the effect above triggers
+  // navigation; meanwhile render a live-region fallback so AT users aren't
+  // stranded on a blank screen.
   if (!user) {
-    return <Landing onLogin={login} theme={theme} toggleTheme={toggle} />
+    return (
+      <div className="app">
+        <div className="state-message" role="status" aria-live="polite">
+          <p>Redirecting to GitHub sign-in…</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Empty state: user has no logex-data repo yet.
+  if (repoMissing) {
+    return (
+      <div className="app">
+        <main className="main" id="main-content">
+          <EmptyOnboarding login={user.login} />
+        </main>
+      </div>
+    )
+  }
+
+  // Any other unrecoverable load error: show onboarding with retry.
+  if (error) {
+    return (
+      <div className="app">
+        <main className="main" id="main-content">
+          <EmptyOnboarding
+            login={user.login}
+            error={error}
+            onRetry={() => setLoadAttempt((n) => n + 1)}
+          />
+        </main>
+      </div>
+    )
   }
 
   const renderPage = () => {

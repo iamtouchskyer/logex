@@ -5,6 +5,7 @@ import {
   hashPassword,
   computeExpiresAt,
   getAuthUser,
+  getAuthUserFull,
   shareKey,
   indexKey,
   MAX_SHARES_PER_USER,
@@ -12,6 +13,7 @@ import {
   type ShareIndex,
   type ShareMeta,
 } from './_lib.js'
+import { fetchFromUserRepo } from '../articles/_lib.js'
 
 // ---------- blob helpers ----------
 
@@ -37,11 +39,12 @@ async function writeBlob(key: string, data: unknown): Promise<void> {
 // ---------- handlers ----------
 
 async function handleCreate(req: VercelRequest, res: VercelResponse): Promise<void> {
-  const login = getAuthUser(req.headers.cookie)
-  if (!login) {
+  const session = getAuthUserFull(req.headers.cookie)
+  if (!session || !session.access_token) {
     res.status(401).json({ error: 'Unauthorized' })
     return
   }
+  const login = session.login
 
   const body = req.body as { slug?: string; password?: string | null; expiresInDays?: number }
   const { slug, password, expiresInDays = 30 } = body
@@ -70,6 +73,40 @@ async function handleCreate(req: VercelRequest, res: VercelResponse): Promise<vo
     return
   }
 
+  // Snapshot article from the user's logex-data repo using their OAuth token.
+  // Shares become resilient to later article deletion / rename, and
+  // handleGet never has to touch GitHub at read time.
+  const indexResult = await fetchFromUserRepo(login, session.access_token, 'index.json')
+  if (indexResult.status !== 200) {
+    res.status(400).json({ error: 'Cannot load article index from your logex-data repo' })
+    return
+  }
+  const indexBody = indexResult.body as {
+    articles?: Array<{
+      slug: string
+      path?: string
+      primaryLang?: string
+      i18n?: Record<string, { path: string }>
+    }>
+  }
+  const entry = indexBody.articles?.find((a) => a.slug === slug.trim())
+  if (!entry) {
+    res.status(404).json({ error: `Article not found: ${slug}` })
+    return
+  }
+  const articlePath = entry.i18n?.[entry.primaryLang ?? '']?.path
+    ?? (entry.i18n ? Object.values(entry.i18n)[0]?.path : undefined)
+    ?? entry.path
+  if (!articlePath) {
+    res.status(400).json({ error: 'Article has no content path' })
+    return
+  }
+  const articleResult = await fetchFromUserRepo(login, session.access_token, articlePath)
+  if (articleResult.status !== 200) {
+    res.status(400).json({ error: 'Cannot load article body' })
+    return
+  }
+
   const id = generateId()
   const passwordHash = hasPassword ? await hashPassword(password!) : null
   const now = new Date().toISOString()
@@ -84,6 +121,7 @@ async function handleCreate(req: VercelRequest, res: VercelResponse): Promise<vo
     expiresAt,
     attempts: 0,
     locked: false,
+    articleSnapshot: articleResult.body,
   }
 
   // Write share record first (source of truth)

@@ -4,6 +4,7 @@
  */
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
+import { verifySession } from '../_session.js'
 
 export interface ShareRecord {
   id: string
@@ -15,6 +16,15 @@ export interface ShareRecord {
   expiresAt: string
   attempts: number
   locked: boolean
+  /**
+   * Frozen copy of the article JSON at share creation time. Makes share links
+   * resilient to later article deletion / rename, and means `handleGet` never
+   * needs to touch GitHub at runtime.
+   *
+   * Optional for backwards-compat with records created before this field
+   * existed; those records will simply 404 on GET.
+   */
+  articleSnapshot?: unknown
 }
 
 export interface ShareIndex {
@@ -113,6 +123,24 @@ export function verifySessionToken(token: string, secret: string): Record<string
 
 /** Extract authenticated user login from cookie header. Returns null if unauthenticated. */
 export function getAuthUser(cookieHeader: string | undefined): string | null {
+  const full = getAuthUserFull(cookieHeader)
+  return full?.login ?? null
+}
+
+export interface AuthPayload {
+  login: string
+  name?: string | null
+  avatar?: string | null
+  access_token?: string
+  exp?: number
+}
+
+/**
+ * Extract full session payload including `access_token` for server-side use
+ * (e.g. proxying to the user's GitHub data repo). Never return this shape to
+ * the client — `access_token` must never cross the wire to browser JS.
+ */
+export function getAuthUserFull(cookieHeader: string | undefined): AuthPayload | null {
   if (!cookieHeader) return null
   const cookies = cookieHeader.split(';').reduce((acc, c) => {
     const eq = c.indexOf('=')
@@ -126,23 +154,17 @@ export function getAuthUser(cookieHeader: string | undefined): string | null {
   const token = cookies.session
   if (!token) return null
 
-  // In production SESSION_SECRET must be set — no fallback (prevents token forgery).
-  // In local dev allow the hardcoded dev secret so `vercel dev` works without setup.
-  const secret = process.env.SESSION_SECRET
-  if (!secret) {
-    if (process.env.NODE_ENV === 'production') {
-      console.error('FATAL: SESSION_SECRET env var not set in production — refusing auth')
-      return null
-    }
-    const devSecret = 'logex-dev-secret'
-    const payload = verifySessionToken(token, devSecret)
-    if (!payload || typeof payload.login !== 'string') return null
-    return payload.login
-  }
-
-  const payload = verifySessionToken(token, secret)
+  // Single source of truth for secret resolution — throws in prod if missing,
+  // falls back to dev secret only in non-prod.
+  const payload = verifySession(token) as Record<string, unknown> | null
   if (!payload || typeof payload.login !== 'string') return null
-  return payload.login
+  return {
+    login: payload.login,
+    name: typeof payload.name === 'string' ? payload.name : null,
+    avatar: typeof payload.avatar === 'string' ? payload.avatar : null,
+    access_token: typeof payload.access_token === 'string' ? payload.access_token : undefined,
+    exp: typeof payload.exp === 'number' ? payload.exp : undefined,
+  }
 }
 
 // ---------- blob key helpers ----------

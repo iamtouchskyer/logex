@@ -1,20 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import crypto from 'crypto'
-
-function verifyToken(token: string, secret: string): Record<string, unknown> | null {
-  const parts = token.split('.')
-  if (parts.length !== 3) return null
-  const [header, body, signature] = parts
-  const expected = crypto.createHmac('sha256', secret).update(`${header}.${body}`).digest('base64url')
-  if (signature !== expected) return null
-  try {
-    const payload = JSON.parse(Buffer.from(body, 'base64url').toString())
-    if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null
-    return payload
-  } catch {
-    return null
-  }
-}
+import { verifySession } from '../_session.js'
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   const cookies = (req.headers.cookie ?? '').split(';').reduce((acc, c) => {
@@ -28,8 +13,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ user: null })
   }
 
-  const secret = process.env.SESSION_SECRET ?? 'logex-dev-secret'
-  const payload = verifyToken(token, secret)
+  const payload = verifySession(token)
   if (!payload) {
     return res.status(401).json({ user: null })
   }

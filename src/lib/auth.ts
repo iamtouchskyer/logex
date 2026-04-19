@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { clearMemCache } from './storage/GitHubAdapter'
 
 export interface User {
   login: string
@@ -18,5 +19,15 @@ export function useAuth() {
       .finally(() => setLoading(false))
   }, [])
 
-  return { user, loading, login: () => { window.location.href = '/api/auth/login' }, logout: () => { window.location.href = '/api/auth/logout' } }
+  return {
+    user,
+    loading,
+    login: () => { window.location.href = '/api/auth/login' },
+    logout: () => {
+      // Drop any user-scoped cache before navigating so the next user who
+      // logs into the same tab cannot read the previous user's data.
+      clearMemCache()
+      window.location.href = '/api/auth/logout'
+    },
+  }
 }

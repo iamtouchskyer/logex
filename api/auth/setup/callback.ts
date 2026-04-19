@@ -92,8 +92,7 @@ function successPage(appSlug: string, clientId: string, autoConfigured: boolean,
     <div class="step">
       <div class="step-num">Step 1 — Set remaining vars in Vercel</div>
       <p style="margin:8px 0 0">In your Vercel dashboard, add:</p>
-      <pre>SESSION_SECRET=$(openssl rand -hex 32)
-ALLOWED_GITHUB_USERS=iamtouchskyer</pre>
+      <pre>SESSION_SECRET=$(openssl rand -hex 32)</pre>
     </div>
     ` : `
     <div class="warn">⚠️ Auto-configuration skipped (no VERCEL_ACCESS_TOKEN set).
@@ -102,8 +101,7 @@ ALLOWED_GITHUB_USERS=iamtouchskyer</pre>
     <div class="step">
       <div class="step-num">Step 1 — Add to Vercel env</div>
       <p style="margin:8px 0 0">Go to Vercel → Project Settings → Environment Variables and add the values above, plus:</p>
-      <pre>SESSION_SECRET=&lt;run: openssl rand -hex 32&gt;
-ALLOWED_GITHUB_USERS=iamtouchskyer</pre>
+      <pre>SESSION_SECRET=&lt;run: openssl rand -hex 32&gt;</pre>
     </div>
     `}
 

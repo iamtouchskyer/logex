@@ -1,0 +1,13 @@
+{
+  "nodeId": "code-review",
+  "nodeType": "review",
+  "runId": "run_1",
+  "status": "completed",
+  "verdict": "FAIL",
+  "summary": "Two independent reviewers (backend + security) audited the multi-tenant SaaS conversion. Combined they surfaced 4 🔴 blockers (auth/session handling, GitHub API proxy safety, scope/permission regressions) and 5 🟡 non-blocking concerns. Verdict: FAIL — blockers must be fixed before gate can pass.",
+  "timestamp": "2026-04-19T15:30:00Z",
+  "artifacts": [
+    { "type": "eval", "path": "nodes/code-review/run_1/eval-backend.md" },
+    { "type": "eval", "path": "nodes/code-review/run_1/eval-security.md" }
+  ]
+}
