@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, cleanup } from '@testing-library/react'
 
 // jsdom polyfill for matchMedia (used by useTheme)
 if (!window.matchMedia) {
@@ -60,11 +60,13 @@ describe('App auth gating', () => {
     cleanup()
   })
 
-  it('unauthenticated user on `/` is redirected to /api/auth/login', async () => {
+  it('unauthenticated user on `/` renders the public Landing page (no redirect)', async () => {
     setHash('/')
     render(<App />)
-    await waitFor(() => expect(hrefSetter).toBe('/api/auth/login'))
-    expect(screen.getByText(/Redirecting to GitHub sign-in/)).toBeInTheDocument()
+    await new Promise((r) => setTimeout(r, 10))
+    expect(hrefSetter).toBeNull()
+    // Landing brand should be visible
+    expect(screen.getByText('Logex')).toBeInTheDocument()
   })
 
   it('unauthenticated user on /share/:id is NOT redirected (public)', async () => {
@@ -74,12 +76,12 @@ describe('App auth gating', () => {
     expect(hrefSetter).toBeNull()
   })
 
-  it('unauthenticated user on /logged-out is NOT redirected (public)', async () => {
-    setHash('/logged-out')
+  it('unauthenticated user on any non-share path renders Landing (no redirect)', async () => {
+    setHash('/timeline')
     render(<App />)
     await new Promise((r) => setTimeout(r, 10))
     expect(hrefSetter).toBeNull()
-    expect(screen.getByRole('heading', { name: /Signed out/i })).toBeInTheDocument()
+    expect(screen.getByText('Logex')).toBeInTheDocument()
   })
 
   it('authenticated user on `/` renders the app shell, no redirect', async () => {

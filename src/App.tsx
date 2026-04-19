@@ -12,7 +12,7 @@ import { ArticleReader } from './pages/ArticleReader'
 import { Timeline } from './pages/Timeline'
 import { SharesManager } from './pages/SharesManager'
 import { SharePage } from './pages/SharePage'
-import { LoggedOutPage } from './pages/LoggedOutPage'
+import { Landing } from './pages/Landing'
 import { EmptyOnboarding } from './components/EmptyOnboarding'
 import { RepoNotFoundError, UnauthenticatedError } from './lib/storage/GitHubAdapter'
 import { useT } from './lib/i18n'
@@ -146,17 +146,9 @@ function App() {
     return set.size
   }, [articles])
 
-  // Auto-redirect unauthenticated users on non-share routes. Runs as a side
-  // effect, not during render (lint: react-hooks/immutability).
-  useEffect(() => {
-    if (authLoading) return
-    if (user) return
-    if (route.path === '/share/:id') return
-    if (route.path === '/logged-out') return
-    if (typeof window !== 'undefined') {
-      window.location.href = '/api/auth/login'
-    }
-  }, [authLoading, user, route.path])
+  // Auto-redirect removed: unauth users land on the public Landing page
+  // instead of getting bounced into GitHub OAuth. The Landing page has its
+  // own "Sign in with GitHub" CTA that triggers the login flow intentionally.
 
   // Auth loading state
   if (authLoading) {
@@ -174,22 +166,19 @@ function App() {
     return <SharePage id={route.params.id} />
   }
 
-  // Public logged-out landing — no auth required. Bypasses the auth gate
-  // so a just-logged-out user isn't instantly bounced back to GitHub.
-  if (route.path === '/logged-out') {
-    return <LoggedOutPage />
-  }
-
-  // Not authenticated on a non-share route — the effect above triggers
-  // navigation; meanwhile render a live-region fallback so AT users aren't
-  // stranded on a blank screen.
+  // Not authenticated — render the public Landing page (with optional
+  // "Signed out" flash if ?signed_out=1 is present in the URL).
   if (!user) {
+    const signedOut = typeof window !== 'undefined' &&
+      /[?&]signed_out=1(?:&|$)/.test(window.location.search)
+    const handleLogin = () => { window.location.href = '/api/auth/login' }
     return (
-      <div className="app">
-        <div className="state-message" role="status" aria-live="polite">
-          <p>Redirecting to GitHub sign-in…</p>
-        </div>
-      </div>
+      <Landing
+        onLogin={handleLogin}
+        theme={theme}
+        toggleTheme={toggle}
+        signedOut={signedOut}
+      />
     )
   }
 

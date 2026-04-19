@@ -1427,6 +1427,63 @@ body {
   }
 }
 
+.landing__flash {
+  position: relative;
+  z-index: 1;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 10px 16px;
+  background: color-mix(in srgb, var(--color-accent-cyan) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-accent-cyan) 45%, transparent);
+  color: var(--color-text);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.landing__meta {
+  margin-top: 32px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.landing__meta-link {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.landing__meta-link:hover {
+  color: var(--color-text);
+  border-bottom-color: var(--color-text-muted);
+}
+
+.landing__meta-link:focus-visible {
+  outline: 2px solid var(--color-accent-cyan);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.landing__meta-sep {
+  opacity: 0.5;
+}
+
+.landing__cta:focus-visible {
+  outline: 2px solid var(--color-accent-cyan);
+  outline-offset: 3px;
+}
+
+.landing__theme-toggle:focus-visible {
+  outline: 2px solid var(--color-accent-cyan);
+  outline-offset: 2px;
+}
+
 /* --- Nav user --- */
 .nav__user {
   display: flex;

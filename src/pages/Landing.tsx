@@ -5,9 +5,10 @@ interface Props {
   onLogin: () => void
   theme: string
   toggleTheme: () => void
+  signedOut?: boolean
 }
 
-export function Landing({ onLogin, theme, toggleTheme }: Props) {
+export function Landing({ onLogin, theme, toggleTheme, signedOut }: Props) {
   const t = useT()
   return (
     <div className="landing">
@@ -26,6 +27,12 @@ export function Landing({ onLogin, theme, toggleTheme }: Props) {
           </button>
         </div>
       </header>
+
+      {signedOut && (
+        <div className="landing__flash" role="status" aria-live="polite">
+          {t('landing.signedOut')}
+        </div>
+      )}
 
       <main className="landing__hero">
         <h1 className="landing__title">
@@ -86,6 +93,27 @@ export function Landing({ onLogin, theme, toggleTheme }: Props) {
             <h3>{t('landing.feature3.title')}</h3>
             <p>{t('landing.feature3.body')}</p>
           </div>
+        </div>
+        <div className="landing__meta">
+          <a
+            className="landing__meta-link"
+            href="https://github.com/iamtouchskyer/logex"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GitHub
+          </a>
+          <span className="landing__meta-sep">·</span>
+          <a
+            className="landing__meta-link"
+            href="https://www.npmjs.com/package/@touchskyer/logex"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            npm
+          </a>
+          <span className="landing__meta-sep">·</span>
+          <span className="landing__meta-text">MIT · made by touchskyer</span>
         </div>
       </footer>
     </div>

@@ -85,6 +85,7 @@ const en = {
   'landing.feature2.body': 'Token counts, cost, tool usage, subagent activity — every session tells a quantitative story.',
   'landing.feature3.title': 'Your coding memory',
   'landing.feature3.body': "Three months from now, you'll remember exactly what happened in that 27-hour debugging session.",
+  'landing.signedOut': 'Signed out. See you next time.',
 
   'auth.logout': 'Logout',
   'auth.skipToContent': 'Skip to content',
@@ -173,6 +174,7 @@ const zh: Record<DictKey, string> = {
   'landing.feature2.body': 'token 数、成本、tool 使用、subagent 活动——每个 session 都是一个量化故事。',
   'landing.feature3.title': '你的编码记忆',
   'landing.feature3.body': '三个月后，你依然能精确记起那个跑了 27 小时的 debug session 发生了什么。',
+  'landing.signedOut': '已登出。下次见。',
 
   'auth.logout': '退出',
   'auth.skipToContent': '跳到正文',
