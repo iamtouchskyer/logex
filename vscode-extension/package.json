@@ -1,0 +1,31 @@
+{
+  "name": "logex-vscode",
+  "displayName": "Logex",
+  "description": "Write blog-style articles from Claude Code sessions",
+  "version": "0.1.0",
+  "publisher": "touchskyer",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": ["onCommand:logex.writeArticle"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "logex.writeArticle",
+        "title": "Logex: Write Article from Session"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc",
+    "package": "vsce package --out ../logex-vscode.vsix"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20",
+    "typescript": "^5",
+    "@vscode/vsce": "^2"
+  }
+}

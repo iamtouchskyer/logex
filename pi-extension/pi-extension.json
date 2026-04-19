@@ -1,0 +1,10 @@
+{
+  "name": "logex-pi",
+  "version": "0.1.0",
+  "description": "Pi extension for Logex — write blog-style articles from Claude Code sessions",
+  "entry": "./index.ts",
+  "capabilities": {
+    "tools": ["logex_write"],
+    "commands": ["logex"]
+  }
+}
