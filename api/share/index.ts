@@ -33,7 +33,9 @@ async function readBlob<T>(key: string): Promise<T | null> {
 
 async function writeBlob(key: string, data: unknown): Promise<void> {
   // access: 'private' — BLOB URLs never exposed to client; reads go through server proxy (handleGet)
-  await put(key, JSON.stringify(data), { access: 'private', contentType: 'application/json', addRandomSuffix: false })
+  // index + record semantics are upsert (create OR update an existing share).
+  // Default non-overwrite would 500 on re-creates.
+  await put(key, JSON.stringify(data), { access: 'private', contentType: 'application/json', addRandomSuffix: false, allowOverwrite: true })
 }
 
 // ---------- handlers ----------
