@@ -139,9 +139,14 @@ async function handleCreate(req: VercelRequest, res: VercelResponse): Promise<vo
     // Don't fail the whole request — share was created successfully
   }
 
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : process.env.APP_URL ?? 'http://localhost:5173'
+  // VERCEL_URL is the *deployment* URL (preview hostname on non-prod deploys).
+  // VERCEL_PROJECT_PRODUCTION_URL is the canonical production domain (system env).
+  // Prefer production URL so share links always use the stable alias.
+  const baseUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : process.env.APP_URL ?? 'http://localhost:5173'
 
   res.status(201).json({
     id,
