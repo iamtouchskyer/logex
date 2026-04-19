@@ -42,6 +42,13 @@ export function parseHash(): Route {
     return { path: '/share/:id', params: { id: shareMatch[1] }, lang: detectInitialLang() }
   }
 
+  // Logged-out landing — lang-independent, public (no auth gate).
+  // Must bypass gating so logout doesn't instantly redirect to GitHub and
+  // silently re-auth (GitHub keeps the authorization and returns a fresh code).
+  if (hash === '/logged-out') {
+    return { path: '/logged-out', params: {}, lang: detectInitialLang() }
+  }
+
   const { lang: prefix, rest } = splitLangPrefix(hash)
   const lang: Lang = prefix ?? detectInitialLang()
   // If no lang prefix was in the URL, persist the detected one so future nav is stable.

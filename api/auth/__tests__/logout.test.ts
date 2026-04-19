@@ -40,9 +40,9 @@ describe('api/auth/logout', () => {
     expect(cookie).toContain('Secure')
   })
 
-  it('redirects home', () => {
+  it('redirects to /#/logged-out landing (not / — avoids auto re-login loop)', () => {
     const res = mockRes()
     logoutHandler({} as any, res)
-    expect(res.redirected).toBe('/')
+    expect(res.redirected).toBe('/#/logged-out')
   })
 })

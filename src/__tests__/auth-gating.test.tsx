@@ -74,6 +74,14 @@ describe('App auth gating', () => {
     expect(hrefSetter).toBeNull()
   })
 
+  it('unauthenticated user on /logged-out is NOT redirected (public)', async () => {
+    setHash('/logged-out')
+    render(<App />)
+    await new Promise((r) => setTimeout(r, 10))
+    expect(hrefSetter).toBeNull()
+    expect(screen.getByRole('heading', { name: /Signed out/i })).toBeInTheDocument()
+  })
+
   it('authenticated user on `/` renders the app shell, no redirect', async () => {
     authState.user = { login: 'alice', name: null, avatar: null }
     setHash('/')

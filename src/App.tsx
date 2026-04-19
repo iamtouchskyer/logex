@@ -12,6 +12,7 @@ import { ArticleReader } from './pages/ArticleReader'
 import { Timeline } from './pages/Timeline'
 import { SharesManager } from './pages/SharesManager'
 import { SharePage } from './pages/SharePage'
+import { LoggedOutPage } from './pages/LoggedOutPage'
 import { EmptyOnboarding } from './components/EmptyOnboarding'
 import { RepoNotFoundError, UnauthenticatedError } from './lib/storage/GitHubAdapter'
 import { useT } from './lib/i18n'
@@ -151,6 +152,7 @@ function App() {
     if (authLoading) return
     if (user) return
     if (route.path === '/share/:id') return
+    if (route.path === '/logged-out') return
     if (typeof window !== 'undefined') {
       window.location.href = '/api/auth/login'
     }
@@ -170,6 +172,12 @@ function App() {
   // Public share route — no auth required, render before auth gate
   if (route.path === '/share/:id') {
     return <SharePage id={route.params.id} />
+  }
+
+  // Public logged-out landing — no auth required. Bypasses the auth gate
+  // so a just-logged-out user isn't instantly bounced back to GitHub.
+  if (route.path === '/logged-out') {
+    return <LoggedOutPage />
   }
 
   // Not authenticated on a non-share route — the effect above triggers

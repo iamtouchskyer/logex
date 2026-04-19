@@ -7,5 +7,9 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   const isLocal = !process.env.VERCEL_URL
   const secure = isLocal ? '' : ' Secure;'
   res.setHeader('Set-Cookie', `session=; Path=/; HttpOnly; SameSite=Lax;${secure} Max-Age=0`)
-  res.redirect('/')
+  // Redirect to a dedicated public landing so the router's 401→login gate
+  // doesn't instantly round-trip the user back through GitHub (which still
+  // holds an authorization, so it silently returns a fresh code and we'd
+  // appear to never log out).
+  res.redirect('/#/logged-out')
 }
