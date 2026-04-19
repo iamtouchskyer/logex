@@ -1,6 +1,6 @@
 // Shared logic for listing recent Claude Code session JSONLs.
 import { readdirSync, statSync, existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 
 export interface SessionEntry {
@@ -72,8 +72,15 @@ export function readArticleBySlug(slug: string): LogexArticle | null {
   if (!match) return null;
 
   const rel = match.path ?? `${slug}.json`;
-  const full = rel.startsWith("/") ? rel : join(dataDir, rel);
-  if (!existsSync(full)) return null;
+  if (rel.includes("..") || resolve(rel) === rel) {
+    throw new Error("Invalid article path");
+  }
+  const full = join(dataDir, rel);
+  const resolved = resolve(full);
+  if (!resolved.startsWith(resolve(dataDir) + sep)) {
+    throw new Error("Invalid article path");
+  }
+  if (!existsSync(resolved)) return null;
   try {
     return JSON.parse(readFileSync(full, "utf-8")) as LogexArticle;
   } catch {

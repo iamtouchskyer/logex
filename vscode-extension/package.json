@@ -19,6 +19,7 @@
     ]
   },
   "scripts": {
+    "vscode:prepublish": "npm run compile",
     "compile": "tsc",
     "package": "vsce package --out ../logex-vscode.vsix"
   },
