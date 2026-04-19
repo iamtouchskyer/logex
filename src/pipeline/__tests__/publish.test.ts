@@ -386,6 +386,78 @@ describe('publish.ts', () => {
     })
   })
 
+  describe('execute — slug idempotency (Bug 6: no double date prefix)', () => {
+    it('update preserves existing slug verbatim, no double date prefix', () => {
+      const existingDir = join(dataDir, '2026', '04', '17')
+      mkdirSync(existingDir, { recursive: true })
+      writeFileSync(join(existingDir, '2026-04-17-foo-bar.zh.json'), JSON.stringify({
+        slug: '2026-04-17-foo-bar', lang: 'zh', title: 'Old', body: 'old', heroImage: '',
+      }))
+      writeIndex({
+        articles: [{
+          slug: '2026-04-17-foo-bar',
+          date: '2026-04-17',
+          sessionId: 'sess-001',
+          chunkIndices: [1],
+          primaryLang: 'zh',
+          i18n: {
+            zh: { title: 'Old', summary: 'x', path: '2026/04/17/2026-04-17-foo-bar.zh.json' },
+          },
+        }],
+        lastUpdated: '',
+      })
+
+      const artPath = writeArticles([
+        { title: 'Updated', summary: 'new', body: 'new body', tags: [], chunkIndices: [1, 2], lang: 'zh' },
+      ])
+      const decPath = writeDecisions([
+        { newIndex: 0, action: 'update', existingSlug: '2026-04-17-foo-bar' },
+      ])
+
+      const out = runPublish([
+        'execute', '--data-dir', dataDir, '--session-id', 'sess-001',
+        '--articles', artPath, '--decisions', decPath,
+      ])
+      const result = JSON.parse(out)
+      // Must stay 2026-04-17-foo-bar, NOT 2026-04-18-2026-04-17-foo-bar
+      expect(result.results[0].slug).toBe('2026-04-17-foo-bar')
+      expect(result.results[0].slug).not.toMatch(/^\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}/)
+    })
+
+    it('insert with pre-dated slug does not double-prefix', () => {
+      writeIndex({ articles: [], lastUpdated: '' })
+      const artPath = writeArticles([
+        {
+          title: 'Test', summary: 'x', body: 'y', tags: [], chunkIndices: [1],
+          slug: '2026-04-17-foo-bar', lang: 'zh',
+        },
+      ])
+      const decPath = writeDecisions([{ newIndex: 0, action: 'insert' }])
+
+      const out = runPublish([
+        'execute', '--data-dir', dataDir, '--session-id', 'sess-001',
+        '--articles', artPath, '--decisions', decPath,
+      ])
+      const result = JSON.parse(out)
+      expect(result.results[0].slug).toBe('2026-04-17-foo-bar')
+    })
+
+    it('insert without slug generates date-prefixed slug', () => {
+      writeIndex({ articles: [], lastUpdated: '' })
+      const artPath = writeArticles([
+        { title: 'No Slug', summary: 'x', body: 'y', tags: [], chunkIndices: [1], lang: 'zh' },
+      ])
+      const decPath = writeDecisions([{ newIndex: 0, action: 'insert' }])
+
+      const out = runPublish([
+        'execute', '--data-dir', dataDir, '--session-id', 'sess-001',
+        '--articles', artPath, '--decisions', decPath,
+      ])
+      const result = JSON.parse(out)
+      expect(result.results[0].slug).toMatch(/^\d{4}-\d{2}-\d{2}-/)
+    })
+  })
+
   describe('execute — misc', () => {
     it('falls back to insert when existingSlug not found', () => {
       writeIndex({ articles: [], lastUpdated: '' })

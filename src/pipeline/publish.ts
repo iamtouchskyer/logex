@@ -105,10 +105,11 @@ function loadIndex(dataDir: string): IndexFile {
 
 function generateSlug(article: NewArticle, sessionId: string, index: number, date: string): string {
   if (article.slug && article.slug.length > 10) {
-    if (!article.slug.startsWith(date)) {
-      return `${date}-${article.slug}`
+    // Idempotent: if slug already has ANY YYYY-MM-DD- prefix, return as-is
+    if (/^\d{4}-\d{2}-\d{2}-/.test(article.slug)) {
+      return article.slug
     }
-    return article.slug
+    return `${date}-${article.slug}`
   }
   return `${date}-${sessionId.slice(0, 8)}-article-${index + 1}`
 }
