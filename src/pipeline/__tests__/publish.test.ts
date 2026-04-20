@@ -249,11 +249,7 @@ describe('commitBatch', () => {
 
   it('rejects blob at exactly MAX_BLOB_BYTES (boundary)', () => {
     const big = 'a'.repeat(MAX_BLOB_BYTES)
-    let err: Error | null = null
-    try { assertBlobSize({ path: 'x.json', content: big, encoding: 'utf-8' }) } catch (e) { err = e as Error }
-    // Contract: > MAX_BLOB_BYTES rejects; exactly MAX_BLOB_BYTES is accepted.
-    // Documenting current behaviour:
-    expect(err).toBeNull()
+    expect(() => assertBlobSize({ path: 'x.json', content: big, encoding: 'utf-8' })).toThrow(BlobTooLargeError)
   })
 
   it('rejects blob at MAX_BLOB_BYTES + 1 (just over limit)', () => {

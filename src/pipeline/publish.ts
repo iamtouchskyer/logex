@@ -180,7 +180,7 @@ export function assertBlobSize(spec: FileSpec): void {
   const size = spec.encoding === 'base64'
     ? Buffer.from(spec.content, 'base64').length
     : Buffer.byteLength(spec.content, 'utf-8')
-  if (size > MAX_BLOB_BYTES) throw new BlobTooLargeError(spec.path, size)
+  if (size >= MAX_BLOB_BYTES) throw new BlobTooLargeError(spec.path, size)
 }
 
 // ─── GitHub helpers ──────────────────────────────────────────────────
