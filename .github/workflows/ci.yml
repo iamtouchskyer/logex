@@ -39,7 +39,7 @@ jobs:
       - name: Install deps
         run: npm ci
       - name: Typecheck
-        run: npx tsc -b
+        run: npm run typecheck
 
   test-unit:
     name: test:unit
