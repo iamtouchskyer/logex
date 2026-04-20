@@ -17,9 +17,11 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
   webServer: {
-    command: `VITE_E2E_PORT=${E2E_PORT} npx vite --port ${E2E_PORT} --strictPort`,
+    // Use `vercel dev` so /api/* routes are served alongside the Vite frontend.
+    // Plain `vite` leaves API routes unresolved and causes most e2e assertions to fail.
+    command: `npx vercel dev --listen ${E2E_PORT} --yes`,
     url: `http://localhost:${E2E_PORT}`,
-    reuseExistingServer: false,
-    timeout: 30000,
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
   },
 })
