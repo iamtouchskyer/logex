@@ -68,18 +68,34 @@ export function createLogexServer(): McpServer {
       },
     },
     async ({ slug }) => {
-      const article = await readArticleBySlug(slug);
-      if (!article) {
+      try {
+        const article = await readArticleBySlug(slug);
+        if (!article) {
+          return {
+            content: [
+              { type: "text" as const, text: JSON.stringify({ error: "not found" }) },
+            ],
+            isError: true,
+          };
+        }
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(article) }],
+        };
+      } catch (err) {
+        const msg = (err as Error).message ?? String(err);
         return {
           content: [
-            { type: "text" as const, text: JSON.stringify({ error: "not found" }) },
+            {
+              type: "text" as const,
+              text: JSON.stringify({
+                error: msg,
+                url: "https://github.com/settings/tokens/new",
+              }),
+            },
           ],
           isError: true,
         };
       }
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify(article) }],
-      };
     },
   );
 
