@@ -12,7 +12,7 @@ Write blog-style session papers from Claude Code transcripts. One session → N 
 
 `logex` turns Claude Code session JSONL transcripts into blog-quality technical articles. It does the boring work (parse, chunk, score, group by signal) as a pure pipeline, then hands the actual **topic segmentation** and **writing** to the LLM that's already in the loop. One long session typically yields 1–3 articles — the agent reads chunk summaries, decides what's worth writing, and produces structured JSON articles that get published to a separate data repo (`logex-data`).
 
-The webapp (React + Vite SPA) reads that data repo and renders the blog at [logex.vercel.app](https://logex.vercel.app).
+The webapp (React + Vite SPA) reads that data repo and renders the blog at [logex-io.vercel.app](https://logex-io.vercel.app).
 
 ### Install
 
@@ -89,7 +89,7 @@ MIT.
 
 `logex` 把 Claude Code session 的 JSONL transcript 变成 blog 级的技术文章。它把"枯燥的部分"（parse、chunk、score、按信号分组）做成纯 pipeline，把**话题切分**和**写作**交给当前在 session 里的 LLM —— 不需要额外 API key。一次长 session 通常产 1–3 篇文章：agent 读 chunk summaries，自己决定哪些值得写，产出结构化的 JSON 文章，发布到独立的 data 仓库 `logex-data`。
 
-Webapp 是 React + Vite SPA，从 data 仓库读文章，部署在 [logex.vercel.app](https://logex.vercel.app)。
+Webapp 是 React + Vite SPA，从 data 仓库读文章，部署在 [logex-io.vercel.app](https://logex-io.vercel.app)。
 
 ### 安装
 
@@ -166,7 +166,7 @@ MIT.
 
 `logex` は Claude Code セッションの JSONL トランスクリプトを、ブログ品質の技術記事に変換します。退屈な処理（parse・chunk・score・シグナル単位でのグルーピング）はピュアな pipeline で処理し、**トピック分割**と**執筆**は、セッション内にすでにいる LLM に任せます — 追加の API key は不要。長めのセッション 1 回で通常 1〜3 本の記事が出ます。agent が chunk summaries を読み、書く価値のある話題を判断し、構造化された JSON 記事を別 repo (`logex-data`) に publish します。
 
-Webapp は React + Vite SPA で、その data repo を読んで [logex.vercel.app](https://logex.vercel.app) に表示されます。
+Webapp は React + Vite SPA で、その data repo を読んで [logex-io.vercel.app](https://logex-io.vercel.app) に表示されます。
 
 ### インストール
 
@@ -233,7 +233,7 @@ MIT.
 
 `logex` 는 Claude Code 세션의 JSONL 트랜스크립트를 블로그 품질의 기술 기사로 바꿉니다. 지루한 작업(parse, chunk, score, 시그널별 그룹핑)은 순수 pipeline 으로 처리하고, **토픽 분할**과 **작성**은 이미 세션 안에 있는 LLM 에게 맡깁니다 — 별도 API key 불필요. 긴 세션 하나로 보통 1〜3 개의 기사가 나옵니다. agent 가 chunk summary 를 읽고 쓸 가치가 있는 것을 고른 뒤, 구조화된 JSON 기사를 별도 data repo (`logex-data`) 로 publish 합니다.
 
-Webapp 은 React + Vite SPA 로, data repo 를 읽어 [logex.vercel.app](https://logex.vercel.app) 에서 렌더링됩니다.
+Webapp 은 React + Vite SPA 로, data repo 를 읽어 [logex-io.vercel.app](https://logex-io.vercel.app) 에서 렌더링됩니다.
 
 ### 설치
 
@@ -298,7 +298,7 @@ MIT.
 
 `logex` convierte los transcripts JSONL de sesiones de Claude Code en artículos técnicos con calidad de blog. La parte aburrida (parse, chunk, score, agrupación por señal) vive en un pipeline puro; la **segmentación por tema** y la **redacción** las hace el LLM que ya está en la sesión — sin API key adicional. Una sesión larga típicamente produce 1–3 artículos: el agent lee los resúmenes de chunk, decide qué vale la pena escribir y publica artículos JSON estructurados en un repo de datos aparte (`logex-data`).
 
-La webapp es una SPA React + Vite que lee ese repo y se despliega en [logex.vercel.app](https://logex.vercel.app).
+La webapp es una SPA React + Vite que lee ese repo y se despliega en [logex-io.vercel.app](https://logex-io.vercel.app).
 
 ### Instalación
 

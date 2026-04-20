@@ -218,5 +218,5 @@ Ask user:
 - The prepare script does parse/chunk/score (pure computation, ~2s).
 - Writing quality (including translation quality) depends on the prompt in `src/pipeline/prompt.ts`.
 - Data repo: `https://github.com/iamtouchskyer/logex-data` (public)
-- Live site: `https://logex.vercel.app`
+- Live site: `https://logex-io.vercel.app`
 - Storage: `VITE_STORAGE=github`, `VITE_GITHUB_REPO=iamtouchskyer/logex-data` in `.env.local`
