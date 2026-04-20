@@ -32,7 +32,7 @@ describe("logex bin (in-process)", () => {
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
-  it("list subcommand writes either 'No sessions' or entries", async () => {
+  it("list subcommand prints either 'No sessions found' or timestamped entries", async () => {
     setupArgv(["list"]);
     const writeSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
     vi.spyOn(process, "exit").mockImplementation(
@@ -40,11 +40,16 @@ describe("logex bin (in-process)", () => {
     );
     await import(BIN);
     await new Promise((r) => setImmediate(r));
-    // either prints "No sessions found..." or zero-or-more entries; just
-    // verify the handler ran (write was called OR list empty silently ok
-    // — but handler always writes when no sessions).
-    // Tolerate the zero-calls case when sessions exist but is empty array.
-    expect(writeSpy.mock.calls.length).toBeGreaterThanOrEqual(0);
+    const out = writeSpy.mock.calls.map((c) => String(c[0])).join("");
+    // The handler ALWAYS writes at least one line:
+    //  - "No sessions found under ~/.claude/projects/\n" when empty
+    //  - one "<ISO-timestamp>  <project>  <path>\n" per entry otherwise
+    expect(out.length).toBeGreaterThan(0);
+    const isEmpty = /No sessions found under ~\/\.claude\/projects\//.test(out);
+    // ISO 8601 timestamp at start of a line followed by two-space separators
+    const hasEntry =
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z {2}\S+ {2}\S+/m.test(out);
+    expect(isEmpty || hasEntry).toBe(true);
   });
 
   it("--help exits 0 and mentions all subcommands", async () => {
@@ -70,12 +75,14 @@ describe("logex bin (in-process)", () => {
       .mockImplementation(((_code?: number) => undefined) as never);
     await import(BIN);
     await new Promise((r) => setImmediate(r));
-    // commander writes the "unknown command" error to stderr and process.exit(1)
-    // Either path is valid: exit called with non-zero or the catch handler ran.
-    const called =
-      exitSpy.mock.calls.some((c) => c[0] !== 0) ||
-      errSpy.mock.calls.length > 0;
-    expect(called).toBe(true);
+    // commander writes "error: unknown command 'nonexistent-cmd'" to stderr
+    // AND calls process.exit(1). Assert both, strictly.
+    const stderr = errSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(stderr).toMatch(/unknown command/i);
+    expect(stderr).toMatch(/nonexistent-cmd/);
+    const nonZeroExits = exitSpy.mock.calls.filter((c) => c[0] !== 0);
+    expect(nonZeroExits.length).toBeGreaterThan(0);
+    expect(nonZeroExits[0][0]).toBe(1);
   });
 
   it("mcp subcommand boots the MCP server with stdio (boundary-mocked)", async () => {
