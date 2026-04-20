@@ -269,12 +269,30 @@ export async function commitBatch(
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
-function generateSlug(article: NewArticle, sessionId: string, index: number, date: string): string {
+function generateSlug(
+  article: NewArticle,
+  sessionId: string,
+  existingSlugs: string[],
+  date: string,
+): string {
   if (article.slug && article.slug.length > 10) {
     if (/^\d{4}-\d{2}-\d{2}-/.test(article.slug)) return article.slug
     return `${date}-${article.slug}`
   }
-  return `${date}-${sessionId.slice(0, 8)}-article-${index + 1}`
+  const sidShort = sessionId.slice(0, 8)
+  // Scan entire index for any slug matching <date>-<sid>-article-<N>(-anything)?
+  // across ALL dates (not just today) to avoid cross-batch collisions on
+  // same-session inserts. Take max N, start at N+1.
+  const re = new RegExp(`^\\d{4}-\\d{2}-\\d{2}-${sidShort}-article-(\\d+)(?:-|$)`)
+  let maxN = 0
+  for (const s of existingSlugs) {
+    const m = s.match(re)
+    if (m) {
+      const n = parseInt(m[1], 10)
+      if (n > maxN) maxN = n
+    }
+  }
+  return `${date}-${sidShort}-article-${maxN + 1}`
 }
 
 function today(): string {
@@ -463,7 +481,11 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
     }
 
     if (!isUpdate) {
-      slug = generateSlug(article, sessionId, dec.newIndex, date)
+      // Collect all existing slugs (including ones queued this batch)
+      // so same-session inserts in one run also get unique article-N.
+      const queuedSlugs = results.map((r) => r.slug)
+      const indexSlugs = index.articles.map((a) => a.slug)
+      slug = generateSlug(article, sessionId, [...indexSlugs, ...queuedSlugs], date)
       articleDate = slug.slice(0, 10)
     }
 
@@ -485,8 +507,11 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
         })
         preservedHeroImage = `/${imgPath}`
       } catch (err) {
-        process.stderr.write(
-          `Warning: hero generation failed for ${slug!}: ${(err as Error).message}\n`,
+        // Fail-fast: no more silent warning. Caller can opt out via
+        // LOGEX_SKIP_HERO=true to get the old best-effort behavior.
+        throw new Error(
+          `Hero image generation failed for "${slug!}": ${(err as Error).message}. ` +
+            `Set LOGEX_SKIP_HERO=true to proceed without hero images.`,
         )
       }
     }
@@ -565,6 +590,25 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
     return true
   })
   index.lastUpdated = date
+
+  // Gate: unless explicitly skipped, every article touched this run
+  // must have a non-empty heroImage in its final index entry.
+  if (!skipHero) {
+    const touchedSlugs = new Set(results.map((r) => r.slug))
+    const missing = index.articles
+      .filter((a) => touchedSlugs.has(a.slug))
+      .filter((a) => {
+        const h = (a.heroImage as string | undefined) ?? ''
+        return !h || h.trim() === ''
+      })
+      .map((a) => a.slug)
+    if (missing.length > 0) {
+      throw new Error(
+        `Hero image missing after publish for: ${missing.join(', ')}. ` +
+          `Set LOGEX_SKIP_HERO=true to proceed without hero images.`,
+      )
+    }
+  }
 
   fileSpecs.push({
     path: 'index.json',
