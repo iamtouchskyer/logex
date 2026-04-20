@@ -146,56 +146,85 @@ If primary is `en`, flip: `lang: "en"`, top-level fields in English, `translatio
 
 **Bilingual is not optional.** Never emit an article without `translations` populated. The data repo's file layout (`YYYY/MM/DD/<slug>.<lang>.json`) depends on it; the renderer's language switcher depends on it.
 
-### 7. Generate hero image (for each article)
-
-Use the `image-x` skill to generate a hero image for each article:
-```
-/image-x Generate a minimalist, dark-themed abstract illustration for a technical blog post titled "{primary-title}". Style: geometric shapes, gradient, developer aesthetic. No text in image. 1200x630.
-```
-
-Save to `/Users/touchskyer/Code/logex-data/images/{slug}.png`. Same image serves both language versions.
-
-### 8. Publish articles to logex-data repo (via publish.ts)
+### 7. Publish articles to logex-data repo (via publish.ts)
 
 **Data repo**: `/Users/touchskyer/Code/logex-data` (clone if missing: `git clone https://github.com/iamtouchskyer/logex-data ~/Code/logex-data`)
 
-First, save all articles from step 6 as a JSON array to a temp file (e.g. `/tmp/logex-articles.json`). Each article must have: `lang`, `title`, `summary`, `body`, `translations` (with the other language populated), `tags`, `chunkIndices`, `project`, and optionally `slug`.
+**IMPORTANT — temp file path**: Use a **session-suffixed** path to avoid collisions with a parallel `/logex` running in another terminal/session on the same machine. Two sessions sharing `/tmp/logex-articles.json` will silently overwrite each other's articles.
 
-#### Step 8a: Check for existing articles (idempotency)
+```bash
+ARTICLES_JSON="/tmp/logex-articles-${SESSION_ID}.json"
+DECISIONS_JSON="/tmp/logex-decisions-${SESSION_ID}.json"
+```
+
+Save all articles from step 6 as a JSON array to `$ARTICLES_JSON`. Each article must have: `lang`, `title`, `summary`, `body`, `translations` (with the other language populated), `tags`, `chunkIndices`, `project`, and optionally `slug`.
+
+#### Step 7a: Check for existing articles (idempotency)
 
 ```bash
 cd /Users/touchskyer/Code/logex-projects/logex
 npx tsx src/pipeline/publish.ts prepare-match \
   --data-dir /Users/touchskyer/Code/logex-data \
   --session-id "<SESSION_ID>" \
-  --articles /tmp/logex-articles.json
+  --articles "$ARTICLES_JSON"
 ```
 
-If `needsLlm: false` → all inserts, skip to 8c with the returned `decisions`.
+If `needsLlm: false` → all inserts, skip to 7c with the returned `decisions`.
 If `needsLlm: true` → **execute the `matchingPrompt` yourself** to decide which new articles update existing ones vs. are new. Output the decisions JSON.
 
-#### Step 8b: (only if needsLlm) Execute matching prompt
+#### Step 7b: (only if needsLlm) Execute matching prompt
 
 The prompt shows existing articles and new articles with their chunkIndices. You decide: update or insert per article. Output:
 ```json
 { "decisions": [{ "newIndex": 0, "action": "update", "existingSlug": "..." }, ...] }
 ```
-Save to `/tmp/logex-decisions.json`.
+Save to `$DECISIONS_JSON`.
 
-#### Step 8c: Execute publish
+#### Step 7c: Execute publish
 
 ```bash
 cd /Users/touchskyer/Code/logex-projects/logex
 npx tsx src/pipeline/publish.ts execute \
   --data-dir /Users/touchskyer/Code/logex-data \
   --session-id "<SESSION_ID>" \
-  --articles /tmp/logex-articles.json \
-  --decisions /tmp/logex-decisions.json
+  --articles "$ARTICLES_JSON" \
+  --decisions "$DECISIONS_JSON"
 ```
 
 This writes one file per `(slug, lang)` pair — for a bilingual article that's two files: `YYYY/MM/DD/<slug>.zh.json` and `YYYY/MM/DD/<slug>.en.json`. Updates `index.json`. Preserves existing slugs/URLs on updates. Re-running `/logex` on the same session is safe — it upserts, not appends.
 
-### 9. Report & deploy
+### 8. Commit articles IMMEDIATELY (before anything slow)
+
+**Don't skip this.** The files written by publish.ts are untracked until committed. Any parallel process on the same repo (another `/logex` session, a `git reset --hard` during test runs, a janitor script) will silently wipe them. Hero image generation in the next step can take 30-60 seconds — that's a large window for disaster.
+
+```bash
+cd /Users/touchskyer/Code/logex-data
+git add .
+git commit -m "articles: {count} from session {SESSION_ID}"
+git push
+```
+
+Only AFTER the push succeeds, proceed to hero images. If the push fails (non-fast-forward), pull-rebase and retry — do not move on with untracked content.
+
+### 9. Generate hero image (for each article)
+
+Use the `image-x` skill to generate a hero image for each article:
+```
+/image-x Generate a minimalist, dark-themed abstract illustration for a technical blog post titled "{primary-title}". Style: geometric shapes, gradient, developer aesthetic. No text in image. 1200x630.
+```
+
+Save to `/Users/touchskyer/Code/logex-data/images/{slug}.png`. Same image serves both language versions. The slug is available from step 7c's output.
+
+When all images are generated, commit+push them:
+
+```bash
+cd /Users/touchskyer/Code/logex-data
+git add images/
+git commit -m "images: hero for session {SESSION_ID}"
+git push
+```
+
+### 10. Report & deploy
 
 Show summary table (columns: primary title · words per language · project):
 ```
@@ -206,7 +235,6 @@ Show summary table (columns: primary title · words per language · project):
 ```
 
 Ask user:
-- Commit & push data? `cd /Users/touchskyer/Code/logex-data && git add . && git commit -m "articles: {count} from session {sessionId}" && git push`
 - Deploy webapp? `cd /Users/touchskyer/Code/logex-projects/logex && git push && npx vercel --prod`
 
 ## Notes
