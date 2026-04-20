@@ -25,7 +25,6 @@ export default defineConfig({
         'src/index.css',
         'src/types/**',
         'src/bin/**',
-        'src/mcp/**',
         'src/lib/storage/types.ts',
         'src/lib/storage/index.ts',
         '**/*.d.ts',
