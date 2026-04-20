@@ -75,7 +75,19 @@ function makeReq(
   body?: unknown,
   extraHeaders?: Record<string, string>,
 ) {
-  return { method, query, body, headers: { ...(extraHeaders ?? {}) } } as any
+  // If the caller passed any explicit headers, honor them verbatim (so tests
+  // that EXERCISE the CSRF missing-origin / missing-host branch still do).
+  // Otherwise, for mutating methods, supply same-origin defaults so unrelated
+  // POST tests don't have to boilerplate the origin/host on every call.
+  let headers: Record<string, string>
+  if (extraHeaders !== undefined) {
+    headers = { ...extraHeaders }
+  } else if (method === 'POST' || method === 'DELETE') {
+    headers = { origin: 'https://logex.example', host: 'logex.example' }
+  } else {
+    headers = {}
+  }
+  return { method, query, body, headers } as any
 }
 
 function validCookie(login = 'alice'): string {
@@ -319,6 +331,82 @@ describe('api/share/[id]', () => {
       expect((res.body as any).error).toMatch(/locked/i)
       // Locked short-circuits BEFORE verifyPassword — no writeBlob
       expect(mocks.putCalls.length).toBe(0)
+    })
+
+    // ── F-6: CSRF Origin check on POST ────────────────────────────────
+    it('F-6 regression: POST with mismatched Origin host returns 403 CSRF (no verify, no increment)', async () => {
+      await seedRecord('idf6mismatch')
+      const res = mockRes()
+      await handler(
+        makeReq('POST', { id: 'idf6mismatch' }, { password: 'correct-pw' }, {
+          origin: 'https://attacker.evil',
+          host: 'logex.example',
+        }),
+        res as any,
+      )
+      expect(res.statusCode).toBe(403)
+      expect((res.body as any).error).toMatch(/CSRF/i)
+      // Must short-circuit BEFORE reading the blob or incrementing attempts.
+      expect(mocks.putCalls.length).toBe(0)
+    })
+
+    it('F-6 regression: POST with no Origin and no Referer returns 403 CSRF', async () => {
+      await seedRecord('idf6noorigin')
+      const res = mockRes()
+      await handler(
+        makeReq('POST', { id: 'idf6noorigin' }, { password: 'correct-pw' }, {
+          host: 'logex.example',
+        }),
+        res as any,
+      )
+      expect(res.statusCode).toBe(403)
+      expect((res.body as any).error).toMatch(/CSRF/i)
+    })
+
+    it('F-6 regression: POST with malformed Origin returns 403 CSRF', async () => {
+      await seedRecord('idf6badurl')
+      const res = mockRes()
+      await handler(
+        makeReq('POST', { id: 'idf6badurl' }, { password: 'correct-pw' }, {
+          origin: 'not-a-url',
+          host: 'logex.example',
+        }),
+        res as any,
+      )
+      expect(res.statusCode).toBe(403)
+    })
+
+    it('F-6: POST accepts Referer as fallback when Origin is absent but host matches', async () => {
+      await seedRecord('idf6referer1')
+      const res = mockRes()
+      await handler(
+        makeReq('POST', { id: 'idf6referer1' }, { password: 'correct-pw' }, {
+          referer: 'https://logex.example/share/idf6referer1',
+          host: 'logex.example',
+        }),
+        res as any,
+      )
+      expect(res.statusCode).toBe(200)
+    })
+
+    it('F-6: POST accepts Origin from ALLOWED_ORIGINS env allowlist', async () => {
+      await seedRecord('idf6allowed1')
+      const prev = process.env.ALLOWED_ORIGINS
+      process.env.ALLOWED_ORIGINS = 'https://alt.logex.example'
+      try {
+        const res = mockRes()
+        await handler(
+          makeReq('POST', { id: 'idf6allowed1' }, { password: 'correct-pw' }, {
+            origin: 'https://alt.logex.example',
+            host: 'logex.example',
+          }),
+          res as any,
+        )
+        expect(res.statusCode).toBe(200)
+      } finally {
+        if (prev === undefined) delete process.env.ALLOWED_ORIGINS
+        else process.env.ALLOWED_ORIGINS = prev
+      }
     })
   })
 

@@ -39,6 +39,39 @@ async function writeBlob(key: string, data: unknown): Promise<void> {
 // ---------- handlers ----------
 
 /**
+ * CSRF guard for mutating methods. Returns true iff the request's Origin
+ * (or Referer, as a fallback for clients that don't set Origin on same-origin
+ * POST) host matches the request host, OR matches an entry in the
+ * `ALLOWED_ORIGINS` env var (comma-separated list of `https://host`).
+ *
+ * Missing Origin AND missing Referer -> reject. Malformed -> reject.
+ */
+function isSameOriginRequest(req: VercelRequest): boolean {
+  const origin = (req.headers.origin as string | undefined) ?? undefined
+  const referer = (req.headers.referer as string | undefined) ?? undefined
+  const host = req.headers.host as string | undefined
+  if (!host) return false
+  const source = origin ?? referer
+  if (!source) return false
+
+  let sourceHost: string
+  try { sourceHost = new URL(source).host } catch { return false }
+
+  if (sourceHost === host) return true
+
+  const allow = (process.env.ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  for (const entry of allow) {
+    try {
+      if (new URL(entry).host === sourceHost) return true
+    } catch { /* ignore malformed allowlist entry */ }
+  }
+  return false
+}
+
+/**
  * GET = public no-password shares only. If the share is password-protected,
  * return 401 PASSWORD_REQUIRED so the client issues a POST with the password
  * in the JSON body (never the URL).
@@ -84,6 +117,16 @@ async function handleGet(req: VercelRequest, res: VercelResponse): Promise<void>
  * Same-origin only (CORS above restricts). Never accepts password via query.
  */
 async function handlePost(req: VercelRequest, res: VercelResponse): Promise<void> {
+  // F-6: CSRF protection on POST. Browsers block cross-origin POST due to
+  // CORS, but non-browser clients (curl / server-side attacker) can still
+  // call this endpoint with any Origin. Require Origin/Referer host to
+  // match request host (or appear in ALLOWED_ORIGINS if configured) — the
+  // same posture we already enforce on DELETE.
+  if (!isSameOriginRequest(req)) {
+    res.status(403).json({ error: 'CSRF check failed' })
+    return
+  }
+
   const id = req.query.id as string
   if (!id || !isValidId(id)) {
     res.status(400).json({ error: 'Invalid share id' })
@@ -145,19 +188,7 @@ async function handleDelete(req: VercelRequest, res: VercelResponse): Promise<vo
   // CSRF protection: require request to originate from same host.
   // Tightened: mutating methods REQUIRE Origin header — requests without one
   // (some fetch clients) are rejected too.
-  const origin = req.headers.origin as string | undefined
-  const host = req.headers.host as string | undefined
-  if (!origin || !host) {
-    res.status(403).json({ error: 'CSRF check failed' })
-    return
-  }
-  try {
-    const originHost = new URL(origin).host
-    if (originHost !== host) {
-      res.status(403).json({ error: 'CSRF check failed' })
-      return
-    }
-  } catch {
+  if (!isSameOriginRequest(req)) {
     res.status(403).json({ error: 'CSRF check failed' })
     return
   }
