@@ -15,6 +15,10 @@ import {
   assertBlobSize,
   assertBilingual,
   BilingualRequiredError,
+  DuplicateContentError,
+  computeContentHash,
+  articleContentHash,
+  buildContentHashIndex,
   BlobTooLargeError,
   SHAConflictError,
   RateLimitedError,
@@ -161,6 +165,131 @@ describe('assertBilingual / BilingualRequiredError', () => {
     expect(() => assertBilingual({
       title: 'T', summary: 'S', body: 'B', lang: 'en', tags: [], chunkIndices: [1],
     }, 0)).not.toThrow()
+  })
+})
+
+describe('content hash / DuplicateContentError', () => {
+  it('computes same hash for same title+body, different for different content', () => {
+    const h1 = computeContentHash('Hello', '# Body\nfoo')
+    const h2 = computeContentHash('Hello', '# Body\nfoo')
+    const h3 = computeContentHash('Hello', '# Body\nbar')
+    const h4 = computeContentHash('Other', '# Body\nfoo')
+    expect(h1).toBe(h2)
+    expect(h1).not.toBe(h3)
+    expect(h1).not.toBe(h4)
+    expect(h1).toMatch(/^[0-9a-f]{16}$/)
+  })
+
+  it('normalizes whitespace so cosmetic differences do not affect hash', () => {
+    const h1 = computeContentHash('  Hello   World  ', 'foo\n\n\nbar')
+    const h2 = computeContentHash('Hello World', 'foo bar')
+    expect(h1).toBe(h2)
+  })
+
+  it('articleContentHash uses primary title+body only', () => {
+    const h = articleContentHash({
+      title: 'T', summary: 'S', body: 'B', tags: [], chunkIndices: [1, 2],
+      translations: { en: { title: 'X', summary: 'Y', body: 'Z' } },
+    })
+    expect(h).toBe(computeContentHash('T', 'B'))
+  })
+
+  it('buildContentHashIndex maps existing articles by their stored hash', () => {
+    const map = buildContentHashIndex({
+      articles: [
+        { slug: 'a', contentHash: 'abc123' },
+        { slug: 'b', contentHash: 'def456' },
+        { slug: 'c' }, // no hash — skipped
+      ],
+      lastUpdated: '',
+    })
+    expect(map.get('abc123')).toBe('a')
+    expect(map.get('def456')).toBe('b')
+    expect(map.size).toBe(2)
+  })
+
+  it('publishRun throws DuplicateContentError when inserting an article with existing content hash', async () => {
+    const ok = makeOctokit()
+    const dupTitle = 'Dup Title'
+    const dupBody = 'Dup Body content'
+    const existingSlug = '2026-01-01-existing'
+    const existingHash = computeContentHash(dupTitle, dupBody)
+    await expect(publishRun({
+      octokit: asOk(ok),
+      sessionId: 'new-session',
+      index: {
+        articles: [{ slug: existingSlug, contentHash: existingHash }],
+        lastUpdated: '',
+      },
+      newArticles: [
+        bilingualArticle({ title: dupTitle, body: dupBody }),
+      ],
+      decisions: [{ newIndex: 0, action: 'insert' }],
+    })).rejects.toThrow(DuplicateContentError)
+    expect(ok.rest.git.createBlob).not.toHaveBeenCalled()
+  })
+
+  it('publishRun allows update pointing at the correct matching slug', async () => {
+    const ok = makeOctokit()
+    const title = 'Same Title'
+    const body = 'Same Body'
+    const slug = '2026-01-01-existing'
+    const hash = computeContentHash(title, body)
+    const res = await publishRun({
+      octokit: asOk(ok),
+      sessionId: 'same-session',
+      index: {
+        articles: [{
+          slug, contentHash: hash, sessionId: 'same-session',
+          primaryLang: 'zh', i18n: {}, chunkIndices: [1],
+        }],
+        lastUpdated: '',
+      },
+      newArticles: [bilingualArticle({ title, body })],
+      decisions: [{ newIndex: 0, action: 'update', existingSlug: slug }],
+    })
+    expect(res.results[0].slug).toBe(slug)
+  })
+
+  it('publishRun throws when update points at a different slug than the content match', async () => {
+    const ok = makeOctokit()
+    const title = 'X'
+    const body = 'Y'
+    const hash = computeContentHash(title, body)
+    await expect(publishRun({
+      octokit: asOk(ok),
+      sessionId: 'sess',
+      index: {
+        articles: [
+          { slug: '2026-01-01-real', contentHash: hash },
+          { slug: '2026-01-02-other', contentHash: 'deadbeef' },
+        ],
+        lastUpdated: '',
+      },
+      newArticles: [bilingualArticle({ title, body })],
+      decisions: [{ newIndex: 0, action: 'update', existingSlug: '2026-01-02-other' }],
+    })).rejects.toThrow(DuplicateContentError)
+  })
+
+  it('mergeIndex stamps contentHash on every new entry', async () => {
+    const ok = makeOctokit()
+    const res = await publishRun({
+      octokit: asOk(ok),
+      sessionId: 's',
+      index: { articles: [], lastUpdated: '' },
+      newArticles: [bilingualArticle({ title: 'Fresh Title', body: 'Fresh Body' })],
+      decisions: [{ newIndex: 0, action: 'insert' }],
+    })
+    expect(res.results).toHaveLength(1)
+    // The committed index.json should have contentHash on the new entry.
+    const tree = ok.rest.git.createTree.mock.calls[0][0].tree as Array<{ path: string }>
+    expect(tree.some((t) => t.path === 'index.json')).toBe(true)
+    const indexBlob = ok.rest.git.createBlob.mock.calls.find(
+      (c: unknown[]) => (c[0] as { content: string }).content.includes('"articles"'),
+    )
+    expect(indexBlob).toBeDefined()
+    const parsed = JSON.parse((indexBlob![0] as { content: string }).content)
+    expect(parsed.articles[0].contentHash).toBe(computeContentHash('Fresh Title', 'Fresh Body'))
   })
 })
 

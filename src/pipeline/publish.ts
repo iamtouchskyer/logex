@@ -682,6 +682,25 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
   // Fail fast: enforce bilingual invariant BEFORE committing anything.
   newArticles.forEach((a, i) => assertBilingual(a, i))
 
+  // Fail fast: enforce content-hash dedup invariant.
+  // If a new article's content hash matches an existing entry but the
+  // decision is "insert" (or an "update" pointing at a DIFFERENT slug),
+  // we're about to create a duplicate. Refuse.
+  const hashToSlug = buildContentHashIndex(index)
+  for (const dec of decisions) {
+    const article = newArticles[dec.newIndex]
+    if (!article) continue
+    const h = articleContentHash(article)
+    const matchedSlug = hashToSlug.get(h)
+    if (!matchedSlug) continue
+    if (dec.action === 'insert') {
+      throw new DuplicateContentError(dec.newIndex, article.title, matchedSlug, '(new insert)')
+    }
+    if (dec.action === 'update' && dec.existingSlug && dec.existingSlug !== matchedSlug) {
+      throw new DuplicateContentError(dec.newIndex, article.title, matchedSlug, dec.existingSlug)
+    }
+  }
+
   const skipHero = process.env.LOGEX_SKIP_HERO === 'true'
   const date = today()
   const articleFileSpecs: FileSpec[] = []
