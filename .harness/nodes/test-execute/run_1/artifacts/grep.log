@@ -1,9 +1,0 @@
-src/pipeline/__tests__/publish.test.ts:    dataDir = join(tmpdir(), `logex-publish-test-${Date.now()}-${Math.random().toString(36).slice(2)}`)
-src/lib/passwordGen.ts: * Uses crypto.getRandomValues + rejection sampling — no Math.random,
-src/lib/__tests__/share-api.test.ts:  const secret = 'logex-dev-secret' // matches default in _lib.ts
-api/auth/login.ts:  // CSPRNG — 128 bits hex. Replaces Math.random() which is non-cryptographic
-api/auth/__tests__/login.test.ts: *   - state is CSPRNG hex (not Math.random)
-api/auth/__tests__/login.test.ts:  it('state is 32-char hex (CSPRNG), never Math.random output', () => {
-api/auth/__tests__/login.test.ts:    // Spy on Math.random to assert NOT called
-api/_session.ts: * drift out of sync — which is what let run_1 sign with `'logex-dev-secret'`
-api/_session.ts:export const DEV_FALLBACK_SECRET = 'logex-dev-secret'
