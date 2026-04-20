@@ -43,7 +43,8 @@
     "test:e2e": "playwright test --grep-invert a11y",
     "test:a11y": "playwright test --grep a11y",
     "extract": "npx tsx src/pipeline/extract.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepare": "husky"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.88.0",
@@ -76,6 +77,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "globals": "^17.4.0",
+    "husky": "^9.1.7",
     "jsdom": "^29.0.2",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.58.0",

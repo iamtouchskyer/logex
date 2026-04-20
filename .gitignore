@@ -28,3 +28,7 @@ dist-ssr
 playwright-report
 test-results
 .vercel
+
+# Env files (secrets — see scripts/check-secrets.mjs + docs)
+.env*
+!.env.example

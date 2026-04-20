@@ -94,3 +94,10 @@ Editing the skill or the hook? Keep it in this repo. The old global install at `
 - Don't mock the segmentation prompt in tests — exercise the real prompt string.
 - Don't add an LLM call to the pipeline. The agent in-session is the LLM.
 - Don't regress a11y — axe failures are build failures.
+
+## Secret Handling
+
+- Never commit `.env*` files. Only `.env.example` is tracked; all other `.env*` files are gitignored.
+- A pre-commit hook runs `scripts/check-secrets.mjs` over the staged diff and blocks commits containing `BLOB_READ_WRITE_TOKEN` / `GITHUB_CLIENT_SECRET` / `SESSION_SECRET` assignments, `sk-*` or `ghp_*` tokens. Do NOT bypass with `--no-verify`; refine the regex instead.
+- For local testing put values in `.env.local` (gitignored). The scanner also accepts file args: `node scripts/check-secrets.mjs path/to/file`.
+- Rotating a leaked secret is a manual human step — Vercel env UI + GitHub App `client_secret` regen. The agent cannot do this for you.
