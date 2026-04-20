@@ -81,4 +81,21 @@ describe('resolveGitHubToken', () => {
     expect(maskToken('something-else')).toBe('[REDACTED]')
     expect(maskToken(undefined)).toBe('[REDACTED]')
   })
+
+  it('swallows .env read errors (readFileSync throws) and falls through', async () => {
+    // Make ~/.claude a file rather than a directory so readFileSync of
+    // ~/.claude/.env throws EISDIR/ENOTDIR. The catch branch on L25 in
+    // github-token.ts should swallow that and behave as if the file were absent.
+    rmSync(join(tmpHome, '.claude'), { recursive: true, force: true })
+    // Create a symlink loop or simply a permission issue: easier — create
+    // a directory entry at the .env path so readFileSync fails with EISDIR.
+    mkdirSync(join(tmpHome, '.claude'), { recursive: true })
+    mkdirSync(join(tmpHome, '.claude', '.env'))
+    // Now readFileSync will throw EISDIR since .env is a directory.
+    const { resolveGitHubToken, MissingGitHubTokenError } = await loadFresh()
+    let err: Error | null = null
+    try { resolveGitHubToken() } catch (e) { err = e as Error }
+    // With no env vars and .env unreadable, MissingGitHubTokenError is thrown.
+    expect(err).toBeInstanceOf(MissingGitHubTokenError)
+  })
 })

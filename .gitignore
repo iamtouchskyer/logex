@@ -28,3 +28,4 @@ dist-ssr
 playwright-report
 test-results
 .vercel
+coverage/
