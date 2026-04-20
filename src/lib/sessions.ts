@@ -1,7 +1,11 @@
 // Shared logic for listing recent Claude Code session JSONLs.
-import { readdirSync, statSync, existsSync, readFileSync } from "node:fs";
-import { join, resolve, sep } from "node:path";
+// Article fetch goes through the GitHub Contents API — no local filesystem read
+// against any logex-data path.
+import { readdirSync, statSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import { homedir } from "node:os";
+import { Octokit } from "@octokit/rest";
+import { resolveGitHubToken } from "./github-token.js";
 
 export interface SessionEntry {
   path: string;
@@ -43,47 +47,67 @@ export interface LogexArticle {
   [key: string]: unknown;
 }
 
-/**
- * Read article JSON from logex-data by slug. Looks up `index.json`, fetches
- * the matching entry's `path`, reads the file. Returns null if not found.
- */
-export function readArticleBySlug(slug: string): LogexArticle | null {
-  const dataDir = join(homedir(), "Code", "logex-data");
-  const indexPath = join(dataDir, "index.json");
-  if (!existsSync(indexPath)) return null;
+const DATA_REPO_OWNER = "iamtouchskyer";
+const DATA_REPO_NAME = "logex-data";
+const DATA_REPO_BRANCH = "main";
 
-  let index: unknown;
+/**
+ * Fetch an article JSON from iamtouchskyer/logex-data on GitHub by slug.
+ * Reads the remote index, resolves the article's primary-language path
+ * (honouring the i18n shape, falling back to the legacy flat `path`),
+ * then fetches + base64-decodes the article JSON. Returns null on 404.
+ */
+export async function readArticleBySlug(
+  slug: string,
+  octokit?: Pick<Octokit, "rest">,
+): Promise<LogexArticle | null> {
+  const client: Pick<Octokit, "rest"> =
+    octokit ?? new Octokit({ auth: resolveGitHubToken() });
+
+  let indexJson: unknown;
   try {
-    index = JSON.parse(readFileSync(indexPath, "utf-8"));
-  } catch {
-    return null;
+    const res = await client.rest.repos.getContent({
+      owner: DATA_REPO_OWNER,
+      repo: DATA_REPO_NAME,
+      path: "index.json",
+      ref: DATA_REPO_BRANCH,
+    });
+    const data = res.data as { content?: string; encoding?: string };
+    if (!data.content || data.encoding !== "base64") return null;
+    indexJson = JSON.parse(Buffer.from(data.content, "base64").toString("utf-8"));
+  } catch (e) {
+    if ((e as { status?: number }).status === 404) return null;
+    throw e;
   }
 
-  const entries: unknown[] = Array.isArray(index)
-    ? index
-    : (index as { articles?: unknown[] })?.articles ?? [];
+  interface Entry { slug?: string; path?: string; primaryLang?: string; i18n?: Record<string, { path?: string }> }
+  const entries: Entry[] = Array.isArray(indexJson)
+    ? (indexJson as Entry[])
+    : (((indexJson as { articles?: unknown[] })?.articles ?? []) as Entry[]);
 
-  const match = entries.find(
-    (e): e is { slug: string; path?: string } =>
-      typeof e === "object" &&
-      e !== null &&
-      (e as { slug?: unknown }).slug === slug,
-  );
+  const match = entries.find((e) => e?.slug === slug);
   if (!match) return null;
 
-  const rel = match.path ?? `${slug}.json`;
-  if (rel.includes("..") || resolve(rel) === rel) {
-    throw new Error("Invalid article path");
-  }
-  const full = join(dataDir, rel);
-  const resolved = resolve(full);
-  if (!resolved.startsWith(resolve(dataDir) + sep)) {
-    throw new Error("Invalid article path");
-  }
-  if (!existsSync(resolved)) return null;
+  const primaryPath =
+    (match.primaryLang ? match.i18n?.[match.primaryLang]?.path : undefined) ??
+    match.path ??
+    `${slug}.json`;
+
+  if (primaryPath.includes("..")) return null;
+
   try {
-    return JSON.parse(readFileSync(full, "utf-8")) as LogexArticle;
-  } catch {
-    return null;
+    const fileRes = await client.rest.repos.getContent({
+      owner: DATA_REPO_OWNER,
+      repo: DATA_REPO_NAME,
+      path: primaryPath,
+      ref: DATA_REPO_BRANCH,
+    });
+    const data = fileRes.data as { content?: string; encoding?: string };
+    if (!data.content || data.encoding !== "base64") return null;
+    const decoded = Buffer.from(data.content, "base64").toString("utf-8");
+    return JSON.parse(decoded) as LogexArticle;
+  } catch (e) {
+    if ((e as { status?: number }).status === 404) return null;
+    throw e;
   }
 }

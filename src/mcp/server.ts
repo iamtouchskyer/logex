@@ -62,13 +62,13 @@ export function createLogexServer(): McpServer {
     "logex_read",
     {
       description:
-        "Read an article JSON from ~/Code/logex-data by slug (via index.json)",
+        "Fetches article JSON from iamtouchskyer/logex-data on GitHub.",
       inputSchema: {
         slug: z.string().describe("Article slug"),
       },
     },
     async ({ slug }) => {
-      const article = readArticleBySlug(slug);
+      const article = await readArticleBySlug(slug);
       if (!article) {
         return {
           content: [

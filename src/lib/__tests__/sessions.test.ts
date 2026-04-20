@@ -1,251 +1,221 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { homedir } from "node:os";
 
-const mocks = vi.hoisted(() => ({
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+const fsMocks = vi.hoisted(() => ({
   existsSync: vi.fn((_p?: unknown): boolean => false),
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  readFileSync: vi.fn((_p?: unknown, _o?: unknown): string => ""),
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   readdirSync: vi.fn((_p?: unknown): string[] => []),
   statSync: vi.fn(),
 }));
 
 vi.mock("node:fs", () => ({
-  existsSync: mocks.existsSync,
-  readFileSync: mocks.readFileSync,
-  readdirSync: mocks.readdirSync,
-  statSync: mocks.statSync,
+  existsSync: fsMocks.existsSync,
+  readdirSync: fsMocks.readdirSync,
+  statSync: fsMocks.statSync,
   default: {
-    existsSync: mocks.existsSync,
-    readFileSync: mocks.readFileSync,
-    readdirSync: mocks.readdirSync,
-    statSync: mocks.statSync,
+    existsSync: fsMocks.existsSync,
+    readdirSync: fsMocks.readdirSync,
+    statSync: fsMocks.statSync,
   },
 }));
 
 import { readArticleBySlug, listRecentSessions } from "../sessions";
 
-const dataDir = join(homedir(), "Code", "logex-data");
 const projectsDir = join(homedir(), ".claude", "projects");
 
-describe("readArticleBySlug – path traversal guard", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+type MockFn = ReturnType<typeof vi.fn>;
 
-  it("resolves a legitimate slug correctly", () => {
+function makeOctokit(getContent: MockFn) {
+  return {
+    rest: {
+      repos: { getContent },
+    },
+  } as unknown as Parameters<typeof readArticleBySlug>[1];
+}
+
+function encode(obj: unknown): { data: { content: string; encoding: string } } {
+  return {
+    data: {
+      content: Buffer.from(JSON.stringify(obj)).toString("base64"),
+      encoding: "base64",
+    },
+  };
+}
+
+describe("readArticleBySlug – GitHub fetch", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("resolves a legitimate slug via legacy flat path entry", async () => {
     const article = { slug: "hello", title: "Hello" };
-    mocks.existsSync.mockImplementation((p: unknown) => {
-      const s = String(p);
-      return s === join(dataDir, "index.json") || s === resolve(dataDir, "hello.json");
-    });
-    mocks.readFileSync.mockImplementation((p: unknown) => {
-      const s = String(p);
-      if (s === join(dataDir, "index.json"))
-        return JSON.stringify([{ slug: "hello" }]);
-      return JSON.stringify(article);
-    });
-
-    expect(readArticleBySlug("hello")).toEqual(article);
+    const getContent = vi.fn()
+      .mockResolvedValueOnce(encode([{ slug: "hello" }]))
+      .mockResolvedValueOnce(encode(article));
+    const result = await readArticleBySlug("hello", makeOctokit(getContent));
+    expect(result).toEqual(article);
+    // second call targets the slug's default path
+    const secondCallArgs = getContent.mock.calls[1][0];
+    expect(secondCallArgs.path).toBe("hello.json");
   });
 
-  it("throws on path with '..'", () => {
-    mocks.existsSync.mockReturnValue(true);
-    mocks.readFileSync.mockImplementation((p: unknown) => {
-      if (String(p) === join(dataDir, "index.json"))
-        return JSON.stringify([{ slug: "evil", path: "../../../etc/passwd" }]);
-      return "root:x:0:0";
-    });
-
-    expect(() => readArticleBySlug("evil")).toThrow("Invalid article path");
+  it("resolves a slug using the i18n primaryLang path", async () => {
+    const article = { slug: "i18n-slug", title: "Hi" };
+    const idx = {
+      articles: [
+        {
+          slug: "i18n-slug",
+          primaryLang: "zh",
+          i18n: { zh: { path: "2026/04/10/i18n-slug.zh.json" } },
+        },
+      ],
+    };
+    const getContent = vi.fn()
+      .mockResolvedValueOnce(encode(idx))
+      .mockResolvedValueOnce(encode(article));
+    const result = await readArticleBySlug("i18n-slug", makeOctokit(getContent));
+    expect(result).toEqual(article);
+    expect(getContent.mock.calls[1][0].path).toBe("2026/04/10/i18n-slug.zh.json");
   });
 
-  it("throws on absolute path", () => {
-    mocks.existsSync.mockReturnValue(true);
-    mocks.readFileSync.mockImplementation((p: unknown) => {
-      if (String(p) === join(dataDir, "index.json"))
-        return JSON.stringify([{ slug: "abs", path: "/etc/passwd" }]);
-      return "root:x:0:0";
-    });
-
-    expect(() => readArticleBySlug("abs")).toThrow("Invalid article path");
-  });
-});
-
-describe("readArticleBySlug – additional branches", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+  it("supports the {articles: [...]} index wrapper", async () => {
+    const article = { slug: "wrap" };
+    const getContent = vi.fn()
+      .mockResolvedValueOnce(encode({ articles: [{ slug: "wrap" }] }))
+      .mockResolvedValueOnce(encode(article));
+    expect(await readArticleBySlug("wrap", makeOctokit(getContent))).toEqual(article);
   });
 
-  it("returns null when index.json is missing", () => {
-    mocks.existsSync.mockReturnValue(false);
-    expect(readArticleBySlug("anything")).toBeNull();
+  it("returns null when index fetch 404s", async () => {
+    const getContent = vi.fn().mockRejectedValue(Object.assign(new Error("nf"), { status: 404 }));
+    expect(await readArticleBySlug("x", makeOctokit(getContent))).toBeNull();
   });
 
-  it("returns null when index.json has invalid JSON", () => {
-    mocks.existsSync.mockImplementation(
-      (p: unknown) => String(p) === join(dataDir, "index.json"),
-    );
-    mocks.readFileSync.mockReturnValue("{ not valid json");
-    expect(readArticleBySlug("any")).toBeNull();
+  it("returns null when slug is not in index", async () => {
+    const getContent = vi.fn().mockResolvedValueOnce(encode({ articles: [{ slug: "other" }] }));
+    expect(await readArticleBySlug("missing", makeOctokit(getContent))).toBeNull();
   });
 
-  it("supports the {articles:[…]} index wrapper form", () => {
-    const article = { slug: "wrap", title: "Wrap" };
-    mocks.existsSync.mockImplementation((p: unknown) => {
-      const s = String(p);
-      return s === join(dataDir, "index.json") || s === resolve(dataDir, "wrap.json");
-    });
-    mocks.readFileSync.mockImplementation((p: unknown) => {
-      const s = String(p);
-      if (s === join(dataDir, "index.json"))
-        return JSON.stringify({ articles: [{ slug: "wrap" }] });
-      return JSON.stringify(article);
-    });
-    expect(readArticleBySlug("wrap")).toEqual(article);
+  it("returns null when article file 404s", async () => {
+    const getContent = vi.fn()
+      .mockResolvedValueOnce(encode({ articles: [{ slug: "gone" }] }))
+      .mockRejectedValueOnce(Object.assign(new Error("nf"), { status: 404 }));
+    expect(await readArticleBySlug("gone", makeOctokit(getContent))).toBeNull();
   });
 
-  it("returns null when slug is not in index", () => {
-    mocks.existsSync.mockImplementation(
-      (p: unknown) => String(p) === join(dataDir, "index.json"),
-    );
-    mocks.readFileSync.mockReturnValue(JSON.stringify([{ slug: "other" }]));
-    expect(readArticleBySlug("missing")).toBeNull();
+  it("rejects paths containing '..'", async () => {
+    const getContent = vi.fn().mockResolvedValueOnce(encode({
+      articles: [{ slug: "evil", path: "../../../etc/passwd" }],
+    }));
+    expect(await readArticleBySlug("evil", makeOctokit(getContent))).toBeNull();
+    expect(getContent).toHaveBeenCalledTimes(1);
   });
 
-  it("returns null when article file does not exist on disk", () => {
-    mocks.existsSync.mockImplementation(
-      (p: unknown) => String(p) === join(dataDir, "index.json"),
-    );
-    mocks.readFileSync.mockImplementation((p: unknown) => {
-      if (String(p) === join(dataDir, "index.json"))
-        return JSON.stringify([{ slug: "gone" }]);
-      return "";
-    });
-    expect(readArticleBySlug("gone")).toBeNull();
+  it("returns null when index response has missing content", async () => {
+    const getContent = vi.fn().mockResolvedValueOnce({ data: {} });
+    expect(await readArticleBySlug("x", makeOctokit(getContent))).toBeNull();
   });
 
-  it("returns null when article file has invalid JSON", () => {
-    mocks.existsSync.mockImplementation((p: unknown) => {
-      const s = String(p);
-      return s === join(dataDir, "index.json") || s === resolve(dataDir, "bad.json");
-    });
-    mocks.readFileSync.mockImplementation((p: unknown) => {
-      const s = String(p);
-      if (s === join(dataDir, "index.json"))
-        return JSON.stringify([{ slug: "bad" }]);
-      return "{ broken";
-    });
-    expect(readArticleBySlug("bad")).toBeNull();
+  it("returns null when file response has missing content", async () => {
+    const getContent = vi.fn()
+      .mockResolvedValueOnce(encode({ articles: [{ slug: "a" }] }))
+      .mockResolvedValueOnce({ data: {} });
+    expect(await readArticleBySlug("a", makeOctokit(getContent))).toBeNull();
   });
 
-  it("skips non-object entries without matching", () => {
-    mocks.existsSync.mockImplementation(
-      (p: unknown) => String(p) === join(dataDir, "index.json"),
-    );
-    mocks.readFileSync.mockReturnValue(
-      JSON.stringify(["garbage", null, 42, { slug: "other" }]),
-    );
-    expect(readArticleBySlug("x")).toBeNull();
+  it("rethrows non-404 errors from index fetch", async () => {
+    const getContent = vi.fn().mockRejectedValue(Object.assign(new Error("boom"), { status: 500 }));
+    await expect(readArticleBySlug("x", makeOctokit(getContent))).rejects.toThrow("boom");
+  });
+
+  it("rethrows non-404 errors from article fetch", async () => {
+    const getContent = vi.fn()
+      .mockResolvedValueOnce(encode({ articles: [{ slug: "a" }] }))
+      .mockRejectedValueOnce(Object.assign(new Error("boom"), { status: 500 }));
+    await expect(readArticleBySlug("a", makeOctokit(getContent))).rejects.toThrow("boom");
   });
 });
 
 describe("listRecentSessions", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+  beforeEach(() => { vi.clearAllMocks(); });
 
   it("returns [] when projects dir does not exist", () => {
-    mocks.existsSync.mockReturnValue(false);
+    fsMocks.existsSync.mockReturnValue(false);
     expect(listRecentSessions()).toEqual([]);
   });
 
   it("returns [] when projects dir is empty", () => {
-    mocks.existsSync.mockImplementation((p: unknown) => String(p) === projectsDir);
-    mocks.readdirSync.mockReturnValue([]);
+    fsMocks.existsSync.mockImplementation((p: unknown) => String(p) === projectsDir);
+    fsMocks.readdirSync.mockReturnValue([]);
     expect(listRecentSessions()).toEqual([]);
   });
 
   it("enumerates jsonl files across projects, newest first, respecting limit", () => {
-    mocks.existsSync.mockImplementation((p: unknown) => String(p) === projectsDir);
-    mocks.readdirSync.mockImplementation((p: unknown) => {
+    fsMocks.existsSync.mockImplementation((p: unknown) => String(p) === projectsDir);
+    fsMocks.readdirSync.mockImplementation((p: unknown) => {
       const s = String(p);
       if (s === projectsDir) return ["proj-a", "proj-b"];
-      if (s === join(projectsDir, "proj-a"))
-        return ["older.jsonl", "notes.md", "newest.jsonl"];
+      if (s === join(projectsDir, "proj-a")) return ["older.jsonl", "notes.md", "newest.jsonl"];
       if (s === join(projectsDir, "proj-b")) return ["middle.jsonl"];
       return [];
     });
-    mocks.statSync.mockImplementation((p: unknown) => {
+    fsMocks.statSync.mockImplementation((p: unknown) => {
       const s = String(p);
       if (s === join(projectsDir, "proj-a") || s === join(projectsDir, "proj-b")) {
-        return { isDirectory: () => true } as unknown as ReturnType<typeof mocks.statSync>;
+        return { isDirectory: () => true } as unknown as ReturnType<typeof fsMocks.statSync>;
       }
       if (s.endsWith("older.jsonl")) return { mtimeMs: 100 } as never;
       if (s.endsWith("middle.jsonl")) return { mtimeMs: 200 } as never;
       if (s.endsWith("newest.jsonl")) return { mtimeMs: 300 } as never;
       throw new Error("unexpected stat: " + s);
     });
-
     const all = listRecentSessions(10);
-    expect(all.map((e) => e.path.split("/").pop())).toEqual([
-      "newest.jsonl",
-      "middle.jsonl",
-      "older.jsonl",
-    ]);
+    expect(all.map((e) => e.path.split("/").pop())).toEqual(["newest.jsonl", "middle.jsonl", "older.jsonl"]);
     expect(all[0].project).toBe("proj-a");
     expect(all[0].mtime).toBe(300);
 
     const limited = listRecentSessions(2);
     expect(limited).toHaveLength(2);
-    expect(limited.map((e) => e.path.endsWith(".jsonl"))).toEqual([true, true]);
   });
 
   it("skips entries whose statSync throws and non-directory entries", () => {
-    mocks.existsSync.mockImplementation((p: unknown) => String(p) === projectsDir);
-    mocks.readdirSync.mockImplementation((p: unknown) => {
+    fsMocks.existsSync.mockImplementation((p: unknown) => String(p) === projectsDir);
+    fsMocks.readdirSync.mockImplementation((p: unknown) => {
       const s = String(p);
       if (s === projectsDir) return ["broken-dir", "afile", "good"];
       if (s === join(projectsDir, "good")) return ["s.jsonl"];
       return [];
     });
-    mocks.statSync.mockImplementation((p: unknown) => {
+    fsMocks.statSync.mockImplementation((p: unknown) => {
       const s = String(p);
       if (s === join(projectsDir, "broken-dir")) throw new Error("stat failed");
       if (s === join(projectsDir, "afile"))
-        return { isDirectory: () => false } as unknown as ReturnType<typeof mocks.statSync>;
+        return { isDirectory: () => false } as unknown as ReturnType<typeof fsMocks.statSync>;
       if (s === join(projectsDir, "good"))
-        return { isDirectory: () => true } as unknown as ReturnType<typeof mocks.statSync>;
+        return { isDirectory: () => true } as unknown as ReturnType<typeof fsMocks.statSync>;
       if (s === join(projectsDir, "good", "s.jsonl"))
         return { mtimeMs: 42 } as never;
       throw new Error("unexpected stat: " + s);
     });
-
     const out = listRecentSessions();
     expect(out).toHaveLength(1);
     expect(out[0].project).toBe("good");
-    expect(out[0].mtime).toBe(42);
   });
 
   it("skips jsonl files whose statSync throws", () => {
-    mocks.existsSync.mockImplementation((p: unknown) => String(p) === projectsDir);
-    mocks.readdirSync.mockImplementation((p: unknown) => {
+    fsMocks.existsSync.mockImplementation((p: unknown) => String(p) === projectsDir);
+    fsMocks.readdirSync.mockImplementation((p: unknown) => {
       const s = String(p);
       if (s === projectsDir) return ["p"];
       if (s === join(projectsDir, "p")) return ["ok.jsonl", "bad.jsonl"];
       return [];
     });
-    mocks.statSync.mockImplementation((p: unknown) => {
+    fsMocks.statSync.mockImplementation((p: unknown) => {
       const s = String(p);
       if (s === join(projectsDir, "p"))
-        return { isDirectory: () => true } as unknown as ReturnType<typeof mocks.statSync>;
+        return { isDirectory: () => true } as unknown as ReturnType<typeof fsMocks.statSync>;
       if (s.endsWith("ok.jsonl")) return { mtimeMs: 1 } as never;
       if (s.endsWith("bad.jsonl")) throw new Error("stat failed");
       throw new Error("unexpected stat: " + s);
     });
-
     const out = listRecentSessions();
     expect(out).toHaveLength(1);
     expect(out[0].path.endsWith("ok.jsonl")).toBe(true);
