@@ -1,11 +1,13 @@
 ---
 name: logex
-description: "Write blog-style session papers from a Claude Code session transcript. One session → N articles (one per topic). LLM decides topic segmentation. No API key. Triggers: 'logex', 'extract session', 'session paper', '提取 session', 'write session article'."
+description: "Write bilingual (zh + en) blog-style session papers from a Claude Code session transcript. One session → N articles (one per topic). LLM decides topic segmentation. No API key. Triggers: 'logex', 'extract session', 'session paper', '提取 session', 'write session article'."
 ---
 
 # Logex — Write Session Papers
 
 Turn Claude Code session transcripts into blog-quality technical articles. A single session can produce **multiple articles** — one per topic/arc. The LLM (you) decides how many topics exist and which are worth writing about.
+
+**All articles are bilingual (zh + en).** Every article ships with a `primary` language body and a `translations` map containing the other language. Never produce a monolingual article — the data repo, renderer, and publish pipeline all assume bilingual shape.
 
 ## Usage
 
@@ -30,7 +32,7 @@ Pick the most recent (or current) session. If `--list`, show 10 most recent acro
 ### 2. Run the prepare script
 
 ```bash
-cd /Users/touchskyer/Code/logex
+cd /Users/touchskyer/Code/logex-projects/logex
 npx tsx src/pipeline/prepare.ts "<JSONL_PATH>" --mode article 2>/dev/null
 ```
 
@@ -101,48 +103,68 @@ Which ones to write? [1,2] / all / none
 
 For each selected group, use the full prepare output you already have. Take the chunk indices from the group, gather those chunks' content from the original JSONL, and write the article yourself using the principles below.
 
-### 6. Write each article (Claude does this itself)
+### 6. Write each article — **bilingual, both languages complete**
 
-For each selected topic group, write the article. Key principles:
+For each selected topic group, write the article in **both Chinese and English**. Key principles:
+
+**Content quality (both versions):**
 - Open with a concrete scene, not a summary
 - Have opinions — say what worked and what didn't
 - Show trade-offs, admit imperfections
 - Be specific (file paths, error messages, numbers)
-- Chinese narrative, English technical terms
-- 1500-3000 words per article
+- 1500–3000 words per article **per language** (so the article is 3000–6000 words total across both versions)
 - **Stay scoped to this topic** — don't bleed into other groups
 
-Output as JSON:
+**Language rules:**
+- **Primary language** is the language the user spoke in the session (detect from chunks — if CJK ratio > 30%, primary is `zh`; else `en`).
+- **zh version**: Chinese narrative, technical terms stay in English (session, pipeline, keybinding, symlink, context, etc.). Don't translate code or file paths.
+- **en version**: Native-feeling English — not a mechanical translation of the Chinese. Same ideas, same opinions, same specificity; rewritten for a native-English reader. Technical terms stay as-is (they're already English).
+- **Titles**: each language gets its own title, written natively. Not a translation — an equivalent hook. Example: `"Mitsein Auth: JWT refresh token 的坑"` / `"Mitsein Auth: The JWT Refresh Token Trap"`.
+- **Summaries**: each language gets its own 2–3 sentence summary, written natively.
+
+**Output as JSON** (primary-first shape, matching `NewArticle` in `src/pipeline/types.ts`):
 ```json
 {
-  "title": "hook 感的标题",
-  "summary": "让人想点进来的 2-3 句",
-  "body": "完整 markdown 文章",
-  "tags": ["..."],
+  "lang": "zh",
+  "title": "Chinese title",
+  "summary": "中文 2-3 句 hook",
+  "body": "完整中文 markdown 正文",
+  "translations": {
+    "en": {
+      "title": "English title",
+      "summary": "English 2-3 sentence hook",
+      "body": "Full English markdown body"
+    }
+  },
+  "tags": ["tag1", "tag2"],
   "project": "project-name",
   "chunkIndices": [1, 2, 3]
 }
 ```
 
+If primary is `en`, flip: `lang: "en"`, top-level fields in English, `translations.zh` holds Chinese.
+
+**Bilingual is not optional.** Never emit an article without `translations` populated. The data repo's file layout (`YYYY/MM/DD/<slug>.<lang>.json`) depends on it; the renderer's language switcher depends on it.
+
 ### 7. Generate hero image (for each article)
 
 Use the `image-x` skill to generate a hero image for each article:
 ```
-/image-x Generate a minimalist, dark-themed abstract illustration for a technical blog post titled "{title}". Style: geometric shapes, gradient, developer aesthetic. No text in image. 1200x630.
+/image-x Generate a minimalist, dark-themed abstract illustration for a technical blog post titled "{primary-title}". Style: geometric shapes, gradient, developer aesthetic. No text in image. 1200x630.
 ```
 
-Save to `/Users/touchskyer/Code/logex-data/images/{slug}.png`.
+Save to `/Users/touchskyer/Code/logex-data/images/{slug}.png`. Same image serves both language versions.
 
 ### 8. Publish articles to logex-data repo (via publish.ts)
 
 **Data repo**: `/Users/touchskyer/Code/logex-data` (clone if missing: `git clone https://github.com/iamtouchskyer/logex-data ~/Code/logex-data`)
 
-First, save all articles from step 6 as a JSON array to a temp file (e.g. `/tmp/logex-articles.json`). Each article must have: `title`, `summary`, `body`, `tags`, `chunkIndices`, `project`, and optionally `slug`.
+First, save all articles from step 6 as a JSON array to a temp file (e.g. `/tmp/logex-articles.json`). Each article must have: `lang`, `title`, `summary`, `body`, `translations` (with the other language populated), `tags`, `chunkIndices`, `project`, and optionally `slug`.
 
 #### Step 8a: Check for existing articles (idempotency)
 
 ```bash
-cd /Users/touchskyer/Code/logex
+cd /Users/touchskyer/Code/logex-projects/logex
 npx tsx src/pipeline/publish.ts prepare-match \
   --data-dir /Users/touchskyer/Code/logex-data \
   --session-id "<SESSION_ID>" \
@@ -163,7 +185,7 @@ Save to `/tmp/logex-decisions.json`.
 #### Step 8c: Execute publish
 
 ```bash
-cd /Users/touchskyer/Code/logex
+cd /Users/touchskyer/Code/logex-projects/logex
 npx tsx src/pipeline/publish.ts execute \
   --data-dir /Users/touchskyer/Code/logex-data \
   --session-id "<SESSION_ID>" \
@@ -171,28 +193,30 @@ npx tsx src/pipeline/publish.ts execute \
   --decisions /tmp/logex-decisions.json
 ```
 
-This handles: writing article JSON files, updating index.json, preserving existing slugs/URLs on updates. Re-running `/logex` on the same session is safe — it upserts, not appends.
+This writes one file per `(slug, lang)` pair — for a bilingual article that's two files: `YYYY/MM/DD/<slug>.zh.json` and `YYYY/MM/DD/<slug>.en.json`. Updates `index.json`. Preserves existing slugs/URLs on updates. Re-running `/logex` on the same session is safe — it upserts, not appends.
 
 ### 9. Report & deploy
 
-Show summary table:
+Show summary table (columns: primary title · words per language · project):
 ```
-| # | Title                          | Words | Project  |
-|---|--------------------------------|-------|----------|
-| 1 | Mitsein Auth: JWT 的陷阱        | 2100  | mitsein  |
-| 2 | Logex 的前端重设计               | 1800  | logex    |
+| # | Title (primary)                | zh words | en words | Project  |
+|---|--------------------------------|----------|----------|----------|
+| 1 | Mitsein Auth: JWT 的陷阱        | 2100     | 1950     | mitsein  |
+| 2 | Logex 的前端重设计               | 1800     | 1750     | logex    |
 ```
 
 Ask user:
 - Commit & push data? `cd /Users/touchskyer/Code/logex-data && git add . && git commit -m "articles: {count} from session {sessionId}" && git push`
-- Deploy webapp? `cd /Users/touchskyer/Code/logex && git push && npx vercel --prod`
+- Deploy webapp? `cd /Users/touchskyer/Code/logex-projects/logex && git push && npx vercel --prod`
 
 ## Notes
 
-- **No API key needed** — Claude writes articles and does segmentation in-session
-- **LLM-driven segmentation** — you (Claude) read chunk summaries and decide topic groups, not rules
-- The prepare script does parse/chunk/score (pure computation, ~2s)
-- Writing quality depends on the prompt in `src/pipeline/prompt.ts`
+- **No API key needed** — Claude writes articles and does segmentation in-session, in both languages.
+- **LLM-driven segmentation** — you (Claude) read chunk summaries and decide topic groups, not rules.
+- **Bilingual end-to-end** — pipeline, storage layout (`*.zh.json` + `*.en.json`), and renderer all depend on it. See `src/pipeline/lang.ts` for language detection logic.
+- **Do not skip the English version** to "save time." Renderer will 404 on the missing language.
+- The prepare script does parse/chunk/score (pure computation, ~2s).
+- Writing quality (including translation quality) depends on the prompt in `src/pipeline/prompt.ts`.
 - Data repo: `https://github.com/iamtouchskyer/logex-data` (public)
 - Live site: `https://logex.vercel.app`
 - Storage: `VITE_STORAGE=github`, `VITE_GITHUB_REPO=iamtouchskyer/logex-data` in `.env.local`
