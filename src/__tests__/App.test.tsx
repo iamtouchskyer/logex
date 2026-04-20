@@ -11,7 +11,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, waitFor, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from '../App'
-import { clearMemCache } from '../lib/storage/GitHubAdapter'
+import { isAllowedAvatarUrl } from '../App'
+import { clearMemCache, getUserScope } from '../lib/storage/GitHubAdapter'
 
 // ---- jsdom polyfills ----------------------------------------------------
 if (!window.matchMedia) {
@@ -128,8 +129,11 @@ describe('App router + guard (real code path)', () => {
 
     // Landing is the public fallback brand
     expect(await screen.findByText('Logex')).toBeInTheDocument()
-    expect(hrefWrites).not.toContain('/api/auth/login')
-    expect(hrefWrites.every((h) => !h.includes('/api/auth/login'))).toBe(true)
+    // F-1: ZERO redirects on unauth Landing path. A substring check like
+    // !h.includes('/api/auth/login') would pass on
+    // `https://evil.example/steal?next=/api/auth/login`, so we require that
+    // no href write happened at all.
+    expect(hrefWrites).toHaveLength(0)
   })
 
   // -------------------------------------------------------------------
@@ -170,9 +174,16 @@ describe('App router + guard (real code path)', () => {
 
     // Positive assertion: we are NOT on Landing (brand text would be "Logex")
     expect(screen.queryByText(/^Sign in with GitHub$/i)).toBeNull()
-    // Negative assertion: no login redirect was attempted
-    expect(window.location.href).not.toContain('/api/auth/login')
-    expect(hrefWrites.every((h) => !h.includes('/api/auth/login'))).toBe(true)
+    // F-1: ZERO redirects — substring check leaks attacker URLs.
+    expect(hrefWrites).toHaveLength(0)
+    // F-3: NEGATIVE assertion on /api/articles/* — the share-bypass path must
+    // never touch the authenticated articles endpoints. A regression that
+    // accidentally triggers the main effect while rendering SharePage would
+    // fail this.
+    const touchedArticles = fetchMock.mock.calls.some(([url]) =>
+      String(url).includes('/api/articles'),
+    )
+    expect(touchedArticles).toBe(false)
   })
 
   // -------------------------------------------------------------------
@@ -195,7 +206,8 @@ describe('App router + guard (real code path)', () => {
     await waitFor(() => {
       expect(screen.getByText('alice')).toBeInTheDocument()
     })
-    expect(hrefWrites.every((h) => !h.includes('/api/auth/login'))).toBe(true)
+    // F-1: no redirects at all on the happy authed path.
+    expect(hrefWrites).toHaveLength(0)
   })
 
   // -------------------------------------------------------------------
@@ -242,10 +254,48 @@ describe('App router + guard (real code path)', () => {
       expect(hrefWrites).toContain('/api/auth/login')
     })
 
-    // Either the authed shell or the loading spinner is visible — NEVER
-    // a completely empty container. Blank-page regression is the red line.
-    expect(container.innerHTML.length).toBeGreaterThan(0)
-    expect(container.querySelector('.app, .state-message')).not.toBeNull()
+    // F-2: positive assertion — the exact login endpoint was written exactly
+    // once, and the shell rendered the authed-layout root (`.app`) while the
+    // redirect was scheduled. A regression that 404s the shell or lands on a
+    // blank `<div />` would fail both checks.
+    expect(hrefWrites.filter((h) => h === '/api/auth/login')).toHaveLength(1)
+    const appRoot = container.querySelector('.app')
+    expect(appRoot).not.toBeNull()
+    expect((appRoot as HTMLElement).children.length).toBeGreaterThan(0)
+  })
+
+  // -------------------------------------------------------------------
+  // F-4 regression: when a protected fetch 401s, the in-memory GitHub
+  // adapter cache MUST be flushed before the login redirect. Otherwise
+  // the next user to auth in this tab inherits the previous user's data.
+  // Biting test: seed a cache entry, trigger the 401 path, assert the
+  // entry is gone AND the redirect happened. Removing clearMemCache()
+  // from the 401 handler makes this go red.
+  // -------------------------------------------------------------------
+  it('F-4: 401 on protected fetch scrubs mem-cache before redirect', async () => {
+    installFetch((url) => {
+      if (url.startsWith('/api/auth/me'))
+        return json(200, { user: { login: 'mia', name: null, avatar: null } })
+      if (url.includes('/api/articles/'))
+        return json(401, { error: 'unauthenticated' })
+      return json(404, {})
+    })
+
+    setHash('/')
+    render(<App />)
+
+    await waitFor(() => {
+      expect(hrefWrites).toContain('/api/auth/login')
+    })
+
+    // F-4 bite: the storage layer's currentUserScope gets set to 'mia' when
+    // the authed articles fetch starts. clearMemCache() — which the 401
+    // handler must call before redirecting — resets the scope back to null.
+    // If the clearMemCache() call is removed from App.tsx's 401 handler,
+    // currentUserScope stays as 'mia' and this assertion goes red.
+    await waitFor(() => {
+      expect(getUserScope()).toBeNull()
+    })
   })
 
   // -------------------------------------------------------------------
@@ -500,6 +550,69 @@ describe('App router + guard (real code path)', () => {
     } finally {
       Storage.prototype.setItem = realSet
     }
+  })
+
+  // -------------------------------------------------------------------
+  // F-7 regression: `user.avatar` must be locked to GitHub's avatar host.
+  // A crafted attacker URL (tracking pixel / XSS via img) must NOT render;
+  // the <img> tag should be omitted entirely (fallback = no avatar).
+  // Biting: swap the allowlist check out, and these tests go red because
+  // the attacker host appears in the rendered DOM.
+  // -------------------------------------------------------------------
+  it('F-7: avatar from GitHub host renders', async () => {
+    installFetch((url) => {
+      if (url.startsWith('/api/auth/me'))
+        return json(200, {
+          user: {
+            login: 'nick',
+            name: null,
+            avatar: 'https://avatars.githubusercontent.com/u/42?v=4',
+          },
+        })
+      if (url.includes('/api/articles/index'))
+        return json(200, { articles: [] })
+      return json(404, {})
+    })
+    setHash('/')
+    render(<App />)
+    await screen.findByText('nick')
+    const img = document.querySelector<HTMLImageElement>('img.nav__avatar')
+    expect(img).not.toBeNull()
+    expect(img!.src).toBe('https://avatars.githubusercontent.com/u/42?v=4')
+  })
+
+  it('F-7: malicious avatar URL is rejected — no img rendered, no attacker host in DOM', async () => {
+    const attackerUrl = 'https://attacker.evil/pixel.gif?uid=nick'
+    installFetch((url) => {
+      if (url.startsWith('/api/auth/me'))
+        return json(200, {
+          user: { login: 'nick', name: null, avatar: attackerUrl },
+        })
+      if (url.includes('/api/articles/index'))
+        return json(200, { articles: [] })
+      return json(404, {})
+    })
+    setHash('/')
+    render(<App />)
+    await screen.findByText('nick')
+    // No avatar img at all — hard fallback.
+    expect(document.querySelector('img.nav__avatar')).toBeNull()
+    // Attacker host must not appear anywhere in the rendered HTML.
+    expect(document.body.innerHTML).not.toContain('attacker.evil')
+  })
+
+  it('F-7: isAllowedAvatarUrl allowlist unit — GitHub only, https only', () => {
+    expect(isAllowedAvatarUrl('https://avatars.githubusercontent.com/u/1')).toBe(true)
+    // Wrong host (even a look-alike)
+    expect(isAllowedAvatarUrl('https://avatars.githubusercontent.com.evil/u/1')).toBe(false)
+    expect(isAllowedAvatarUrl('https://githubusercontent.com/u/1')).toBe(false)
+    // Wrong scheme
+    expect(isAllowedAvatarUrl('http://avatars.githubusercontent.com/u/1')).toBe(false)
+    expect(isAllowedAvatarUrl('javascript:alert(1)')).toBe(false)
+    expect(isAllowedAvatarUrl('data:image/png;base64,AAA')).toBe(false)
+    // Garbage
+    expect(isAllowedAvatarUrl('not-a-url')).toBe(false)
+    expect(isAllowedAvatarUrl('')).toBe(false)
   })
 
   // Silence unused-import warnings — keep userEvent available for future cases

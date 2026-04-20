@@ -29,3 +29,7 @@ playwright-report
 test-results
 .vercel
 coverage/
+
+# Env files (secrets — see scripts/check-secrets.mjs + docs)
+.env*
+!.env.example

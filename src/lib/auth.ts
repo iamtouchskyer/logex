@@ -27,7 +27,36 @@ export function useAuth() {
       // Drop any user-scoped cache before navigating so the next user who
       // logs into the same tab cannot read the previous user's data.
       clearMemCache()
+      // F-5: also scrub persistent `logex.*` keys from localStorage +
+      // sessionStorage. Any `logex-` prefixed key is app-scoped state (e.g.
+      // `logex-sidebar-collapsed`, future per-user drafts). Leaving them
+      // behind means user B sees user A's UI state / leaks.
+      scrubLogexStorage()
       window.location.href = '/api/auth/logout'
     },
+  }
+}
+
+/**
+ * Remove every localStorage + sessionStorage key starting with `logex.` or
+ * `logex-`. Exported for unit tests — not part of the public surface.
+ */
+export function scrubLogexStorage(): void {
+  const isLogex = (k: string): boolean => k.startsWith('logex.') || k.startsWith('logex-')
+  for (const store of [
+    typeof localStorage !== 'undefined' ? localStorage : null,
+    typeof sessionStorage !== 'undefined' ? sessionStorage : null,
+  ]) {
+    if (!store) continue
+    try {
+      const toDelete: string[] = []
+      for (let i = 0; i < store.length; i++) {
+        const k = store.key(i)
+        if (k && isLogex(k)) toDelete.push(k)
+      }
+      for (const k of toDelete) {
+        try { store.removeItem(k) } catch { /* ignore */ }
+      }
+    } catch { /* ignore */ }
   }
 }

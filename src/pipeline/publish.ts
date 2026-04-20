@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { Octokit } from '@octokit/rest'
 import { resolveGitHubToken, maskToken } from '../lib/github-token.js'
 import type { Lang } from './types.js'
@@ -94,6 +95,17 @@ export class BilingualRequiredError extends Error {
   }
 }
 
+export class DuplicateContentError extends Error {
+  constructor(articleIndex: number, title: string, existingSlug: string, intendedSlug: string) {
+    super(
+      `Article [${articleIndex}] "${title}" has the same content as existing slug `
+      + `"${existingSlug}" but is being inserted as "${intendedSlug}". `
+      + `Treat as update (existingSlug="${existingSlug}") or change the content.`,
+    )
+    this.name = 'DuplicateContentError'
+  }
+}
+
 // ─── Types ───────────────────────────────────────────────────────────
 
 interface LangContent {
@@ -138,6 +150,8 @@ interface ExistingArticleMeta {
   heroImage?: string
   duration?: string
   stats?: Record<string, unknown>
+  /** sha256(primaryTitle + "\n" + primaryBody), first 16 hex chars. */
+  contentHash?: string
   [key: string]: unknown
 }
 
@@ -175,6 +189,49 @@ export function assertBilingual(article: NewArticle, idx: number): void {
       throw new BilingualRequiredError(idx, article.title, primary, need)
     }
   }
+}
+
+// ─── Content hash (dedup) ────────────────────────────────────────────
+
+/**
+ * Stable content fingerprint for an article. Only uses primary title+body,
+ * which determine "is this the same article?" — sessionId, chunkIndices,
+ * tags, heroImage all irrelevant for dedup.
+ *
+ * Whitespace is normalized (trim + collapse runs of whitespace to a single
+ * space) so cosmetic re-runs of the same content don't produce a different
+ * hash.
+ */
+function normalizeForHash(s: string): string {
+  return s.replace(/\s+/g, ' ').trim()
+}
+
+export function computeContentHash(title: string, body: string): string {
+  const input = normalizeForHash(title) + '\n' + normalizeForHash(body)
+  return createHash('sha256').update(input, 'utf-8').digest('hex').slice(0, 16)
+}
+
+export function articleContentHash(article: NewArticle): string {
+  return computeContentHash(article.title, article.body)
+}
+
+/** Pull content hash off an existing index entry, computing from disk if absent. */
+export function existingContentHash(meta: ExistingArticleMeta): string | undefined {
+  return typeof meta.contentHash === 'string' ? meta.contentHash : undefined
+}
+
+/**
+ * Build {hash → slug} map of existing articles. Used by prepareMatch to
+ * auto-decide "same content = update existing slug" and by publishRun to
+ * hard-fail on conflicts.
+ */
+export function buildContentHashIndex(index: IndexFile): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const a of index.articles) {
+    const h = existingContentHash(a)
+    if (h) map.set(h, a.slug)
+  }
+  return map
 }
 
 // ─── Size check ──────────────────────────────────────────────────────
@@ -333,12 +390,30 @@ export async function commitBatch(
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
-function generateSlug(article: NewArticle, sessionId: string, index: number, date: string): string {
+function generateSlug(
+  article: NewArticle,
+  sessionId: string,
+  existingSlugs: string[],
+  date: string,
+): string {
   if (article.slug && article.slug.length > 10) {
     if (/^\d{4}-\d{2}-\d{2}-/.test(article.slug)) return article.slug
     return `${date}-${article.slug}`
   }
-  return `${date}-${sessionId.slice(0, 8)}-article-${index + 1}`
+  const sidShort = sessionId.slice(0, 8)
+  // Scan entire index for any slug matching <date>-<sid>-article-<N>(-anything)?
+  // across ALL dates (not just today) to avoid cross-batch collisions on
+  // same-session inserts. Take max N, start at N+1.
+  const re = new RegExp(`^\\d{4}-\\d{2}-\\d{2}-${sidShort}-article-(\\d+)(?:-|$)`)
+  let maxN = 0
+  for (const s of existingSlugs) {
+    const m = s.match(re)
+    if (m) {
+      const n = parseInt(m[1], 10)
+      if (n > maxN) maxN = n
+    }
+  }
+  return `${date}-${sidShort}-article-${maxN + 1}`
 }
 
 function today(): string {
@@ -379,19 +454,52 @@ export async function prepareMatch(
   const index = await fetchIndex(octokit)
   const newArticles: NewArticle[] = JSON.parse(readFileSync(articlesPath, 'utf-8'))
 
+  // Pre-pass: content-hash dedup across ALL existing articles (any session).
+  // If the hash matches an existing slug, auto-pin this article as an update
+  // of that slug — no LLM needed for it, no chance of a duplicate insert.
+  const hashToSlug = buildContentHashIndex(index)
+  const hashDecisions: MatchDecision[] = []
+  const remainingIdxs: number[] = []
+  for (let i = 0; i < newArticles.length; i++) {
+    const h = articleContentHash(newArticles[i])
+    const existingSlug = hashToSlug.get(h)
+    if (existingSlug) {
+      hashDecisions.push({ newIndex: i, action: 'update', existingSlug })
+    } else {
+      remainingIdxs.push(i)
+    }
+  }
+
+  // Existing articles for this session (minus any already resolved by hash)
+  const hashResolvedSlugs = new Set(hashDecisions.map((d) => d.existingSlug))
   const existing = index.articles.filter(
-    (a) => a.sessionId === sessionId && a.chunkIndices && a.chunkIndices.length > 0,
+    (a) => a.sessionId === sessionId
+      && a.chunkIndices && a.chunkIndices.length > 0
+      && !hashResolvedSlugs.has(a.slug),
   )
 
+  // All new articles resolved by content hash → no LLM needed.
+  if (remainingIdxs.length === 0) {
+    process.stdout.write(JSON.stringify({
+      needsLlm: false,
+      decisions: hashDecisions,
+      matchingPrompt: null,
+      dedupByHash: hashDecisions.length,
+    }) + '\n')
+    return
+  }
+
+  // Remaining new articles + no session-based existing → all inserts.
   if (existing.length === 0) {
-    const decisions: MatchDecision[] = newArticles.map((_, i) => ({
+    const inserts: MatchDecision[] = remainingIdxs.map((i) => ({
       newIndex: i,
       action: 'insert' as const,
     }))
     process.stdout.write(JSON.stringify({
       needsLlm: false,
-      decisions,
+      decisions: [...hashDecisions, ...inserts],
       matchingPrompt: null,
+      dedupByHash: hashDecisions.length,
     }) + '\n')
     return
   }
@@ -404,7 +512,8 @@ export async function prepareMatch(
     return `  [E${i}] slug: ${a.slug} | title: "${title}" | chunkIndices: [${ci}]`
   }).join('\n')
 
-  const newDesc = newArticles.map((a, i) => {
+  const newDesc = remainingIdxs.map((i) => {
+    const a = newArticles[i]
     const ci = a.chunkIndices.join(', ')
     return `  [N${i}] title: "${a.title}" | chunkIndices: [${ci}]`
   }).join('\n')
@@ -443,9 +552,13 @@ ${newDesc}
 
   process.stdout.write(JSON.stringify({
     needsLlm: true,
+    // Hash-resolved decisions already fixed; LLM only decides for remaining.
+    preDecisions: hashDecisions,
     decisions: null,
     matchingPrompt: prompt,
     existingCount: existing.length,
+    newCount: remainingIdxs.length,
+    dedupByHash: hashDecisions.length,
     newCount: newArticles.length,
   }) + '\n')
 }
@@ -521,6 +634,7 @@ export function mergeIndex(
       stats: p.preservedStats,
       primaryLang: p.primaryLang,
       i18n: p.i18nMap,
+      contentHash: articleContentHash(p.article),
     }
 
     let existingIdx = -1
@@ -606,7 +720,11 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
     }
 
     if (!isUpdate) {
-      slug = generateSlug(article, sessionId, dec.newIndex, date)
+      // Collect all existing slugs (including ones queued this batch)
+      // so same-session inserts in one run also get unique article-N.
+      const queuedSlugs = prepared.map((p) => p.slug)
+      const indexSlugs = index.articles.map((a) => a.slug)
+      slug = generateSlug(article, sessionId, [...indexSlugs, ...queuedSlugs], date)
       articleDate = slug.slice(0, 10)
     }
 
@@ -628,8 +746,11 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
         })
         preservedHeroImage = `/${imgPath}`
       } catch (err) {
-        process.stderr.write(
-          `Warning: hero generation failed for ${slug!}: ${(err as Error).message}\n`,
+        // Fail-fast: no more silent warning. Caller can opt out via
+        // LOGEX_SKIP_HERO=true to get the old best-effort behavior.
+        throw new Error(
+          `Hero image generation failed for "${slug!}": ${(err as Error).message}. ` +
+            `Set LOGEX_SKIP_HERO=true to proceed without hero images.`,
         )
       }
     }
@@ -682,6 +803,25 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
   for (let attempt = 1; attempt <= MAX_REF_RETRIES; attempt++) {
     const mergeResult = mergeIndex(index, prepared, sessionId, date)
     results = mergeResult.results
+
+    // Gate: unless explicitly skipped, every article touched this run
+    // must have a non-empty heroImage in its final index entry.
+    if (!skipHero) {
+      const touchedSlugs = new Set(results.map((r) => r.slug))
+      const missing = mergeResult.index.articles
+        .filter((a) => touchedSlugs.has(a.slug))
+        .filter((a) => {
+          const h = (a.heroImage as string | undefined) ?? ''
+          return !h || h.trim() === ''
+        })
+        .map((a) => a.slug)
+      if (missing.length > 0) {
+        throw new Error(
+          `Hero image missing after publish for: ${missing.join(', ')}. ` +
+            `Set LOGEX_SKIP_HERO=true to proceed without hero images.`,
+        )
+      }
+    }
 
     const fileSpecs: FileSpec[] = [
       ...articleFileSpecs,

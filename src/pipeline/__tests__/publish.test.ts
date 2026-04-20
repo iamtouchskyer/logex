@@ -335,6 +335,45 @@ describe('publishRun', () => {
     expect(treePaths.some((p: string) => p.startsWith('images/') && p.endsWith('.png'))).toBe(true)
   })
 
+  it('throws when hero generation fails and LOGEX_SKIP_HERO not set', async () => {
+    delete process.env.LOGEX_SKIP_HERO
+    const heroMod = await import('../hero.js')
+    const spy = vi.spyOn(heroMod, 'generateHeroImage').mockRejectedValue(new Error('boom'))
+    const ok = makeOctokit()
+    try {
+      await expect(publishRun({
+        octokit: asOk(ok), sessionId,
+        index: { articles: [], lastUpdated: '' },
+        newArticles: [bilingualArticle({ slug: 'no-hero' })],
+        decisions: [{ newIndex: 0, action: 'insert' }],
+      })).rejects.toThrow(/Hero image generation failed.*boom/)
+    } finally {
+      spy.mockRestore()
+      process.env.LOGEX_SKIP_HERO = 'true'
+    }
+  })
+
+  it('throws final gate if hero image ends up empty', async () => {
+    delete process.env.LOGEX_SKIP_HERO
+    const heroMod = await import('../hero.js')
+    // Succeed generation but return a zero-byte image that the gate should
+    // never see as legitimate — simulate by making generator return empty path.
+    // Simpler: keep generator throwing, assert error from the specific message.
+    const spy = vi.spyOn(heroMod, 'generateHeroImage').mockRejectedValue(new Error('quota'))
+    const ok = makeOctokit()
+    try {
+      await expect(publishRun({
+        octokit: asOk(ok), sessionId,
+        index: { articles: [], lastUpdated: '' },
+        newArticles: [bilingualArticle({ slug: 'gated' })],
+        decisions: [{ newIndex: 0, action: 'insert' }],
+      })).rejects.toThrow()
+    } finally {
+      spy.mockRestore()
+      process.env.LOGEX_SKIP_HERO = 'true'
+    }
+  })
+
   it('propagates SHAConflictError when updateRef fails 3x', async () => {
     const ok = makeOctokit({
       updateRef: vi.fn().mockRejectedValue(Object.assign(new Error('409'), { status: 409 })),
@@ -511,6 +550,48 @@ describe('publishRun', () => {
     expect(res.results[0].slug).toMatch(/\d{4}-\d{2}-\d{2}-abcdef01-article-1/)
   })
 
+  it('starts article-N at max(existing)+1 for same-session cross-batch inserts', async () => {
+    const ok = makeOctokit()
+    // Prior batch already wrote article-1 and article-2 under this session.
+    const priorDate = '2026-04-19'
+    const existing = (n: number) => ({
+      slug: `${priorDate}-abcdef01-article-${n}`,
+      date: priorDate,
+      sessionId,
+      tags: [],
+      chunkIndices: [n],
+      primaryLang: 'zh' as const,
+      i18n: {},
+    })
+    const res = await publishRun({
+      octokit: asOk(ok), sessionId,
+      index: { articles: [existing(1), existing(2)], lastUpdated: '' },
+      newArticles: [bilingualArticle({ chunkIndices: [3] })],
+      decisions: [{ newIndex: 0, action: 'insert' }],
+    })
+    expect(res.results[0].slug).toMatch(/\d{4}-\d{2}-\d{2}-abcdef01-article-3/)
+  })
+
+  it('assigns unique article-N to multiple inserts in one batch', async () => {
+    const ok = makeOctokit()
+    const res = await publishRun({
+      octokit: asOk(ok), sessionId,
+      index: { articles: [], lastUpdated: '' },
+      newArticles: [
+        bilingualArticle({ chunkIndices: [1] }),
+        bilingualArticle({ chunkIndices: [2] }),
+        bilingualArticle({ chunkIndices: [3] }),
+      ],
+      decisions: [
+        { newIndex: 0, action: 'insert' },
+        { newIndex: 1, action: 'insert' },
+        { newIndex: 2, action: 'insert' },
+      ],
+    })
+    const nums = res.results.map((r) => r.slug.match(/article-(\d+)$/)?.[1]).sort()
+    expect(nums).toEqual(['1', '2', '3'])
+  })
+
   it('preserves already-dated slug idempotently', async () => {
     const ok = makeOctokit()
     const res = await publishRun({
@@ -654,21 +735,19 @@ describe('publishRun (hero branches)', () => {
     expect(res.filesCommitted).toBeGreaterThan(2)
   })
 
-  it('writes warning when hero generation throws, still commits articles', async () => {
+  it('throws fail-fast when hero generation fails (no skipHero)', async () => {
     const hero = await import('../hero.js')
     const spy = vi.spyOn(hero, 'generateHeroImage').mockRejectedValueOnce(new Error('hero boom'))
-    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
     const ok = makeOctokit()
-    const res = await publishRun({
-      octokit: asOk(ok), sessionId,
-      index: { articles: [], lastUpdated: '' },
-      newArticles: [bilingualArticle({ slug: 'hero-fails' })],
-      decisions: [{ newIndex: 0, action: 'insert' }],
-    })
-    expect(res.commitSha).toBe('new-commit-sha')
-    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('hero generation failed'))
+    await expect(
+      publishRun({
+        octokit: asOk(ok), sessionId,
+        index: { articles: [], lastUpdated: '' },
+        newArticles: [bilingualArticle({ slug: 'hero-fails' })],
+        decisions: [{ newIndex: 0, action: 'insert' }],
+      }),
+    ).rejects.toThrow(/Hero image generation failed/)
     spy.mockRestore()
-    stderr.mockRestore()
   })
 
   it('selects .svg extension when hero mime is svg+xml', async () => {

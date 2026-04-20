@@ -23,8 +23,6 @@ export default defineConfig({
         'src/main.tsx',
         'src/index.ts',
         'src/index.css',
-        'src/types/**',
-        'src/bin/**',
         'src/lib/storage/types.ts',
         'src/lib/storage/index.ts',
         '**/*.d.ts',
