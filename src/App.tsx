@@ -14,10 +14,31 @@ import { SharesManager } from './pages/SharesManager'
 import { SharePage } from './pages/SharePage'
 import { Landing } from './pages/Landing'
 import { EmptyOnboarding } from './components/EmptyOnboarding'
-import { RepoNotFoundError, UnauthenticatedError } from './lib/storage/GitHubAdapter'
+import { RepoNotFoundError, UnauthenticatedError, clearMemCache } from './lib/storage/GitHubAdapter'
 import { useT } from './lib/i18n'
 
 const SIDEBAR_COLLAPSED_KEY = 'logex-sidebar-collapsed'
+
+/**
+ * F-7: GitHub avatar URLs are the only legitimate `user.avatar` source —
+ * our `/api/auth/me` returns whatever GitHub's /user sends back. A
+ * compromised/forged user object could carry an attacker-controlled URL
+ * that (a) phones home on render or (b) tracks the logged-in user. Hard
+ * allowlist the host — anything else falls back to rendering no avatar.
+ */
+const ALLOWED_AVATAR_HOSTS: readonly string[] = [
+  'avatars.githubusercontent.com',
+]
+
+export function isAllowedAvatarUrl(url: string): boolean {
+  try {
+    const u = new URL(url)
+    if (u.protocol !== 'https:') return false
+    return ALLOWED_AVATAR_HOSTS.includes(u.host)
+  } catch {
+    return false
+  }
+}
 
 function HamburgerIcon() {
   return (
@@ -68,7 +89,10 @@ function App() {
           return
         }
         if (e instanceof UnauthenticatedError) {
-          // Session expired mid-session — redirect to re-auth
+          // F-4: session expired mid-session. Drop any cached articles/sessions
+          // before redirecting — otherwise a different user who re-auths into
+          // the same tab would briefly see the previous user's cached data.
+          clearMemCache()
           window.location.href = '/api/auth/login'
           return
         }
@@ -247,7 +271,9 @@ function App() {
 
             <div className="nav__actions">
             <div className="nav__user">
-              {user.avatar && <img src={user.avatar} alt="" className="nav__avatar" />}
+              {user.avatar && isAllowedAvatarUrl(user.avatar) && (
+                <img src={user.avatar} alt="" className="nav__avatar" />
+              )}
               <span className="nav__username">{user.login}</span>
               <button className="nav__logout" onClick={logout} type="button">{t('auth.logout')}</button>
             </div>
