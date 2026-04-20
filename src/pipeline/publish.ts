@@ -1,38 +1,70 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
-import { join, dirname } from 'path'
-import type { Lang } from './types'
+import { readFileSync } from 'node:fs'
+import { Octokit } from '@octokit/rest'
+import { resolveGitHubToken } from '../lib/github-token.js'
+import type { Lang } from './types.js'
+import { generateHeroImage } from './hero.js'
 
 /**
  * publish.ts — Deterministic publish pipeline for logex articles.
  *
- * Code handles: reading index, writing files, upsert mechanics.
- * LLM handles: (a) deciding which new articles match existing ones,
- *              (b) generating primary-language article + translation.
+ * Writes article JSONs + optional hero images + updated index.json directly
+ * to `iamtouchskyer/logex-data` on GitHub via the Contents/Git API as a
+ * single atomic commit per run. No local working copy, no shell git.
  *
- * i18n note: every article has a `lang` field (primary language) and an
- * optional `translations` map keyed by other Lang. publish.ts writes one
- * file per language as `<slug>.<lang>.json` and emits an index entry with
- * `primaryLang` + `i18n: Partial<Record<Lang, { title, summary, path }>>`.
- *
- * Two modes:
- *   1. `prepare-match` — reads index + new articles, outputs a matchingPrompt
- *      for the LLM to decide upsert/insert per article.
- *   2. `execute` — takes the LLM's matching decisions and writes files.
+ * Modes:
+ *   1. `prepare-match` — reads remote index + local new articles, outputs a
+ *      matching prompt for the LLM to decide upsert/insert.
+ *   2. `execute` — takes the LLM's matching decisions and commits files.
  *
  * Usage:
  *   npx tsx src/pipeline/publish.ts prepare-match \
- *     --data-dir ~/Code/logex-data \
  *     --session-id abc123 \
  *     --articles /tmp/articles.json
  *
  *   npx tsx src/pipeline/publish.ts execute \
- *     --data-dir ~/Code/logex-data \
  *     --session-id abc123 \
  *     --articles /tmp/articles.json \
  *     --decisions /tmp/decisions.json
  */
 
-// ─── Types ────────────────────────────────────────────────────────────
+// ─── Constants ───────────────────────────────────────────────────────
+
+export const DATA_REPO_OWNER = 'iamtouchskyer'
+export const DATA_REPO_NAME = 'logex-data'
+export const DATA_REPO_BRANCH = 'main'
+export const MAX_BLOB_BYTES = 90 * 1024 * 1024
+export const MAX_REF_RETRIES = 3
+
+// ─── Errors ──────────────────────────────────────────────────────────
+
+export class BlobTooLargeError extends Error {
+  constructor(path: string, size: number) {
+    super(`Blob at ${path} is ${size} bytes, exceeds ${MAX_BLOB_BYTES} limit`)
+    this.name = 'BlobTooLargeError'
+  }
+}
+
+export class SHAConflictError extends Error {
+  constructor() {
+    super(
+      'upstream index.json changed — try again (ref updateRef returned 409 after max retries)',
+    )
+    this.name = 'SHAConflictError'
+  }
+}
+
+export class BilingualRequiredError extends Error {
+  constructor(articleIndex: number, title: string, primary: Lang, missing: Lang) {
+    super(
+      `Article [${articleIndex}] "${title}" has primaryLang="${primary}" `
+      + `but is missing required "${missing}" translation (title/summary/body). `
+      + `Bilingual is mandatory for zh-primary articles — never emit monolingual.`,
+    )
+    this.name = 'BilingualRequiredError'
+  }
+}
+
+// ─── Types ───────────────────────────────────────────────────────────
 
 interface LangContent {
   title: string
@@ -44,15 +76,15 @@ interface NewArticle {
   title: string
   summary: string
   body: string
-  /** Primary (source-of-truth) language for this article. Defaults to 'zh'. */
   lang?: Lang
-  /** Optional translations keyed by target language. */
   translations?: Partial<Record<Lang, LangContent>>
   tags: string[]
   project?: string
   chunkIndices: number[]
   slug?: string
   stats?: Record<string, unknown>
+  /** Optional base64-encoded hero image PNG. */
+  heroImageBase64?: string
 }
 
 interface LangMeta {
@@ -63,14 +95,11 @@ interface LangMeta {
 
 interface ExistingArticleMeta {
   slug: string
-  // Legacy flat shape:
   title?: string
   summary?: string
   path?: string
-  // New i18n shape:
   primaryLang?: Lang
   i18n?: Partial<Record<Lang, LangMeta>>
-  // Common:
   date?: string
   sessionId?: string
   chunkIndices?: number[]
@@ -93,22 +122,156 @@ interface MatchDecision {
   existingSlug?: string
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────
-
-function loadIndex(dataDir: string): IndexFile {
-  const indexPath = join(dataDir, 'index.json')
-  if (!existsSync(indexPath)) {
-    return { articles: [], lastUpdated: '' }
-  }
-  return JSON.parse(readFileSync(indexPath, 'utf-8'))
+export interface FileSpec {
+  /** Path relative to repo root. */
+  path: string
+  /** Either utf-8 text or base64. `encoding` selects which. */
+  content: string
+  encoding: 'utf-8' | 'base64'
 }
+
+// ─── Invariants ──────────────────────────────────────────────────────
+
+export const REQUIRED_TRANSLATIONS: Partial<Record<Lang, Lang[]>> = {
+  zh: ['en'],
+}
+
+export function assertBilingual(article: NewArticle, idx: number): void {
+  const primary: Lang = article.lang ?? 'zh'
+  const required = REQUIRED_TRANSLATIONS[primary] ?? []
+  for (const need of required) {
+    const t = article.translations?.[need]
+    if (!t || !t.title?.trim() || !t.summary?.trim() || !t.body?.trim()) {
+      throw new BilingualRequiredError(idx, article.title, primary, need)
+    }
+  }
+}
+
+// ─── Size check ──────────────────────────────────────────────────────
+
+export function assertBlobSize(spec: FileSpec): void {
+  const size = spec.encoding === 'base64'
+    ? Buffer.from(spec.content, 'base64').length
+    : Buffer.byteLength(spec.content, 'utf-8')
+  if (size > MAX_BLOB_BYTES) throw new BlobTooLargeError(spec.path, size)
+}
+
+// ─── GitHub helpers ──────────────────────────────────────────────────
+
+export type OctokitLike = Pick<Octokit, 'rest'>
+
+async function getRef(octokit: OctokitLike): Promise<{ sha: string }> {
+  const res = await octokit.rest.git.getRef({
+    owner: DATA_REPO_OWNER,
+    repo: DATA_REPO_NAME,
+    ref: `heads/${DATA_REPO_BRANCH}`,
+  })
+  return { sha: res.data.object.sha }
+}
+
+async function getCommitTreeSha(octokit: OctokitLike, commitSha: string): Promise<string> {
+  const res = await octokit.rest.git.getCommit({
+    owner: DATA_REPO_OWNER,
+    repo: DATA_REPO_NAME,
+    commit_sha: commitSha,
+  })
+  return res.data.tree.sha
+}
+
+export async function fetchIndex(octokit: OctokitLike): Promise<IndexFile> {
+  try {
+    const res = await octokit.rest.repos.getContent({
+      owner: DATA_REPO_OWNER,
+      repo: DATA_REPO_NAME,
+      path: 'index.json',
+      ref: DATA_REPO_BRANCH,
+    })
+    const data = res.data as { content?: string; encoding?: string }
+    if (data.content && data.encoding === 'base64') {
+      const decoded = Buffer.from(data.content, 'base64').toString('utf-8')
+      return JSON.parse(decoded)
+    }
+    return { articles: [], lastUpdated: '' }
+  } catch (e) {
+    const status = (e as { status?: number }).status
+    if (status === 404) return { articles: [], lastUpdated: '' }
+    throw e
+  }
+}
+
+/**
+ * Commit a batch of files to the data repo as a single atomic commit.
+ * Pre-validates blob sizes. Retries on 409 ref conflict up to MAX_REF_RETRIES
+ * times by rebuilding the tree on the new parent.
+ */
+export async function commitBatch(
+  octokit: OctokitLike,
+  files: FileSpec[],
+  message: string,
+): Promise<{ commitSha: string; attempts: number }> {
+  for (const f of files) assertBlobSize(f)
+
+  let attempt = 0
+  while (attempt < MAX_REF_RETRIES) {
+    attempt++
+    const { sha: parentSha } = await getRef(octokit)
+    const baseTreeSha = await getCommitTreeSha(octokit, parentSha)
+
+    const blobs = await Promise.all(
+      files.map(async (f) => {
+        const res = await octokit.rest.git.createBlob({
+          owner: DATA_REPO_OWNER,
+          repo: DATA_REPO_NAME,
+          content: f.content,
+          encoding: f.encoding === 'utf-8' ? 'utf-8' : 'base64',
+        })
+        return { path: f.path, sha: res.data.sha }
+      }),
+    )
+
+    const treeRes = await octokit.rest.git.createTree({
+      owner: DATA_REPO_OWNER,
+      repo: DATA_REPO_NAME,
+      base_tree: baseTreeSha,
+      tree: blobs.map((b) => ({
+        path: b.path,
+        mode: '100644' as const,
+        type: 'blob' as const,
+        sha: b.sha,
+      })),
+    })
+
+    const commitRes = await octokit.rest.git.createCommit({
+      owner: DATA_REPO_OWNER,
+      repo: DATA_REPO_NAME,
+      message,
+      tree: treeRes.data.sha,
+      parents: [parentSha],
+    })
+
+    try {
+      await octokit.rest.git.updateRef({
+        owner: DATA_REPO_OWNER,
+        repo: DATA_REPO_NAME,
+        ref: `heads/${DATA_REPO_BRANCH}`,
+        sha: commitRes.data.sha,
+      })
+      return { commitSha: commitRes.data.sha, attempts: attempt }
+    } catch (e) {
+      const status = (e as { status?: number }).status
+      if (status !== 409) throw e
+      if (attempt >= MAX_REF_RETRIES) throw new SHAConflictError()
+      // loop again with fresh parent
+    }
+  }
+  throw new SHAConflictError()
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────
 
 function generateSlug(article: NewArticle, sessionId: string, index: number, date: string): string {
   if (article.slug && article.slug.length > 10) {
-    // Idempotent: if slug already has ANY YYYY-MM-DD- prefix, return as-is
-    if (/^\d{4}-\d{2}-\d{2}-/.test(article.slug)) {
-      return article.slug
-    }
+    if (/^\d{4}-\d{2}-\d{2}-/.test(article.slug)) return article.slug
     return `${date}-${article.slug}`
   }
   return `${date}-${sessionId.slice(0, 8)}-article-${index + 1}`
@@ -119,19 +282,11 @@ function today(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-/**
- * Build the on-disk relative path for a (slug, lang) pair.
- * Always language-suffixed now: `YYYY/MM/DD/<slug>.<lang>.json`.
- */
 function articlePath(slug: string, lang: Lang): string {
   const parts = slug.slice(0, 10).split('-')
   return `${parts[0]}/${parts[1]}/${parts[2]}/${slug}.${lang}.json`
 }
 
-/**
- * Collect (lang, content) pairs from an article: primary + all translations.
- * Primary first.
- */
 function enumerateLangContent(article: NewArticle): Array<{ lang: Lang; content: LangContent }> {
   const primary: Lang = article.lang ?? 'zh'
   const out: Array<{ lang: Lang; content: LangContent }> = [
@@ -142,7 +297,7 @@ function enumerateLangContent(article: NewArticle): Array<{ lang: Lang; content:
   ]
   if (article.translations) {
     for (const [lang, content] of Object.entries(article.translations) as Array<[Lang, LangContent]>) {
-      if (lang === primary) continue  // primary already added
+      if (lang === primary) continue
       if (!content) continue
       out.push({ lang, content })
     }
@@ -152,12 +307,16 @@ function enumerateLangContent(article: NewArticle): Array<{ lang: Lang; content:
 
 // ─── prepare-match ───────────────────────────────────────────────────
 
-function prepareMatch(dataDir: string, sessionId: string, articlesPath: string): void {
-  const index = loadIndex(dataDir)
+export async function prepareMatch(
+  octokit: OctokitLike,
+  sessionId: string,
+  articlesPath: string,
+): Promise<void> {
+  const index = await fetchIndex(octokit)
   const newArticles: NewArticle[] = JSON.parse(readFileSync(articlesPath, 'utf-8'))
 
   const existing = index.articles.filter(
-    (a) => a.sessionId === sessionId && a.chunkIndices && a.chunkIndices.length > 0
+    (a) => a.sessionId === sessionId && a.chunkIndices && a.chunkIndices.length > 0,
   )
 
   if (existing.length === 0) {
@@ -165,17 +324,16 @@ function prepareMatch(dataDir: string, sessionId: string, articlesPath: string):
       newIndex: i,
       action: 'insert' as const,
     }))
-    console.log(JSON.stringify({
+    process.stdout.write(JSON.stringify({
       needsLlm: false,
       decisions,
       matchingPrompt: null,
-    }))
+    }) + '\n')
     return
   }
 
   const existingDesc = existing.map((a, i) => {
     const ci = (a.chunkIndices ?? []).join(', ')
-    // Support both legacy (title at top) and new (i18n[primaryLang].title) shapes
     const title = a.title
       ?? (a.primaryLang ? a.i18n?.[a.primaryLang]?.title : undefined)
       ?? '(untitled)'
@@ -219,42 +377,68 @@ ${newDesc}
 
 每篇新文章必须恰好出现一次。只输出 JSON。`
 
-  console.log(JSON.stringify({
+  process.stdout.write(JSON.stringify({
     needsLlm: true,
     decisions: null,
     matchingPrompt: prompt,
     existingCount: existing.length,
     newCount: newArticles.length,
-  }))
+  }) + '\n')
 }
 
 // ─── execute ─────────────────────────────────────────────────────────
 
-function execute(
-  dataDir: string,
+export async function execute(
+  octokit: OctokitLike,
   sessionId: string,
   articlesPath: string,
   decisionsPath: string,
-): void {
-  const index = loadIndex(dataDir)
+): Promise<void> {
+  const index = await fetchIndex(octokit)
   const newArticles: NewArticle[] = JSON.parse(readFileSync(articlesPath, 'utf-8'))
   const decisionsRaw = JSON.parse(readFileSync(decisionsPath, 'utf-8'))
   const decisions: MatchDecision[] = decisionsRaw.decisions ?? decisionsRaw
 
+  const result = await publishRun({ octokit, sessionId, index, newArticles, decisions })
+  process.stdout.write(JSON.stringify(result) + '\n')
+}
+
+export interface PublishRunInput {
+  octokit: OctokitLike
+  sessionId: string
+  index: IndexFile
+  newArticles: NewArticle[]
+  decisions: MatchDecision[]
+}
+
+export interface PublishRunResult {
+  results: Array<{ slug: string; action: string; title: string; langs: Lang[] }>
+  totalArticles: number
+  commitSha: string
+  filesCommitted: number
+}
+
+export async function publishRun(input: PublishRunInput): Promise<PublishRunResult> {
+  const { octokit, sessionId, index, newArticles, decisions } = input
+
+  // Fail fast: enforce bilingual invariant BEFORE committing anything.
+  newArticles.forEach((a, i) => assertBilingual(a, i))
+
+  const skipHero = process.env.LOGEX_SKIP_HERO === 'true'
   const date = today()
-  const results: Array<{ slug: string; action: string; title: string; langs: Lang[] }> = []
+  const results: PublishRunResult['results'] = []
+  const fileSpecs: FileSpec[] = []
 
   for (const dec of decisions) {
     const article = newArticles[dec.newIndex]
     if (!article) {
-      console.error(`Warning: newIndex ${dec.newIndex} out of range, skipping`)
+      process.stderr.write(`Warning: newIndex ${dec.newIndex} out of range, skipping\n`)
       continue
     }
 
     const primaryLang: Lang = article.lang ?? 'zh'
     const langContents = enumerateLangContent(article)
 
-    // Will be resolved below.
     let slug: string
     let articleDate: string
     let preservedHeroImage = ''
@@ -266,35 +450,15 @@ function execute(
     if (dec.action === 'update' && dec.existingSlug) {
       existingIdx = index.articles.findIndex((a) => a.slug === dec.existingSlug)
       if (existingIdx === -1) {
-        console.error(`Warning: existing slug "${dec.existingSlug}" not found, treating as insert`)
+        process.stderr.write(`Warning: existing slug "${dec.existingSlug}" not found, treating as insert\n`)
       } else {
         const existing = index.articles[existingIdx]
         slug = existing.slug
         articleDate = existing.date ?? existing.slug.slice(0, 10)
         preservedHeroImage = (existing.heroImage as string) ?? ''
         preservedDuration = (existing.duration as string) ?? ''
+        preservedStats = (existing.stats as Record<string, unknown>) ?? preservedStats
         isUpdate = true
-
-        // Try to read an existing body file to recover heroImage/stats/duration.
-        // Try new-schema path first, then legacy flat path.
-        const candidatePaths: string[] = []
-        const i18nEntries = existing.i18n ?? {}
-        for (const meta of Object.values(i18nEntries)) {
-          if (meta?.path) candidatePaths.push(meta.path)
-        }
-        if (existing.path) candidatePaths.push(existing.path)
-
-        for (const p of candidatePaths) {
-          const abs = join(dataDir, p)
-          if (!existsSync(abs)) continue
-          try {
-            const old = JSON.parse(readFileSync(abs, 'utf-8'))
-            preservedHeroImage = old.heroImage ?? preservedHeroImage
-            preservedStats = old.stats ?? preservedStats
-            preservedDuration = old.duration ?? preservedDuration
-            break
-          } catch { /* ignore */ }
-        }
       }
     }
 
@@ -303,12 +467,33 @@ function execute(
       articleDate = slug.slice(0, 10)
     }
 
-    // Write one file per language.
+    if (article.heroImageBase64) {
+      const imgPath = `images/${slug!}.png`
+      fileSpecs.push({ path: imgPath, content: article.heroImageBase64, encoding: 'base64' })
+      preservedHeroImage = `/${imgPath}`
+    } else if (!skipHero && (!preservedHeroImage || preservedHeroImage.trim() === '')) {
+      try {
+        const img = await generateHeroImage(slug!, article.title)
+        const ext = img.mime === 'image/png' ? 'png'
+          : img.mime === 'image/svg+xml' ? 'svg'
+          : 'png'
+        const imgPath = `images/${slug!}.${ext}`
+        fileSpecs.push({
+          path: imgPath,
+          content: img.data.toString('base64'),
+          encoding: 'base64',
+        })
+        preservedHeroImage = `/${imgPath}`
+      } catch (err) {
+        process.stderr.write(
+          `Warning: hero generation failed for ${slug!}: ${(err as Error).message}\n`,
+        )
+      }
+    }
+
     const i18nMap: Partial<Record<Lang, LangMeta>> = {}
     for (const { lang, content } of langContents) {
       const relPath = articlePath(slug!, lang)
-      const absPath = join(dataDir, relPath)
-
       const articleData = {
         slug: slug!,
         lang,
@@ -324,18 +509,14 @@ function execute(
         duration: preservedDuration,
         stats: preservedStats,
       }
-
-      mkdirSync(dirname(absPath), { recursive: true })
-      writeFileSync(absPath, JSON.stringify(articleData, null, 2))
-
-      i18nMap[lang] = {
-        title: content.title,
-        summary: content.summary,
+      fileSpecs.push({
         path: relPath,
-      }
+        content: JSON.stringify(articleData, null, 2),
+        encoding: 'utf-8',
+      })
+      i18nMap[lang] = { title: content.title, summary: content.summary, path: relPath }
     }
 
-    // Compose index entry (new i18n schema).
     const entry: ExistingArticleMeta = {
       slug: slug!,
       date: articleDate!,
@@ -345,20 +526,18 @@ function execute(
       heroImage: preservedHeroImage,
       chunkIndices: article.chunkIndices,
       duration: preservedDuration,
-      stats: preservedStats as Record<string, unknown>,
+      stats: preservedStats,
       primaryLang,
       i18n: i18nMap,
     }
 
     if (isUpdate && existingIdx !== -1) {
-      // Merge: keep any pre-existing translations that the new article didn't re-emit
       const existing = index.articles[existingIdx]
       const mergedI18n: Partial<Record<Lang, LangMeta>> = { ...(existing.i18n ?? {}) }
       for (const [lang, meta] of Object.entries(i18nMap) as Array<[Lang, LangMeta]>) {
         mergedI18n[lang] = meta
       }
       entry.i18n = mergedI18n
-      // Preserve primaryLang if already set on existing and not overridden
       entry.primaryLang = article.lang ?? existing.primaryLang ?? primaryLang
       index.articles[existingIdx] = entry
       results.push({
@@ -378,7 +557,6 @@ function execute(
     }
   }
 
-  // Sort by date desc, deduplicate by slug
   index.articles.sort((a, b) => (b.slug > a.slug ? 1 : -1))
   const seen = new Set<string>()
   index.articles = index.articles.filter((a) => {
@@ -388,45 +566,77 @@ function execute(
   })
   index.lastUpdated = date
 
-  writeFileSync(join(dataDir, 'index.json'), JSON.stringify(index, null, 2))
+  fileSpecs.push({
+    path: 'index.json',
+    content: JSON.stringify(index, null, 2),
+    encoding: 'utf-8',
+  })
 
-  console.log(JSON.stringify({ results, totalArticles: index.articles.length }))
+  const articleCount = results.length
+  const message = `articles: ${articleCount} from session ${sessionId}`
+  const { commitSha } = await commitBatch(octokit, fileSpecs, message)
+
+  return {
+    results,
+    totalArticles: index.articles.length,
+    commitSha,
+    filesCommitted: fileSpecs.length,
+  }
 }
 
 // ─── CLI ─────────────────────────────────────────────────────────────
 
-function main() {
+function getArg(args: string[], name: string): string {
+  const idx = args.indexOf(`--${name}`)
+  if (idx === -1 || !args[idx + 1]) {
+    process.stderr.write(`Missing required argument: --${name}\n`)
+    process.exit(1)
+  }
+  return args[idx + 1]
+}
+
+export async function main(): Promise<void> {
   const args = process.argv.slice(2)
   const command = args[0]
 
-  function getArg(name: string): string {
-    const idx = args.indexOf(`--${name}`)
-    if (idx === -1 || !args[idx + 1]) {
-      console.error(`Missing required argument: --${name}`)
-      process.exit(1)
-    }
-    return args[idx + 1]
+  if (command !== 'prepare-match' && command !== 'execute') {
+    process.stderr.write('Usage:\n')
+    process.stderr.write('  npx tsx src/pipeline/publish.ts prepare-match --session-id <id> --articles <path>\n')
+    process.stderr.write('  npx tsx src/pipeline/publish.ts execute --session-id <id> --articles <path> --decisions <path>\n')
+    process.exit(1)
   }
 
-  if (command === 'prepare-match') {
-    prepareMatch(
-      getArg('data-dir'),
-      getArg('session-id'),
-      getArg('articles'),
-    )
-  } else if (command === 'execute') {
-    execute(
-      getArg('data-dir'),
-      getArg('session-id'),
-      getArg('articles'),
-      getArg('decisions'),
-    )
-  } else {
-    console.error('Usage:')
-    console.error('  npx tsx src/pipeline/publish.ts prepare-match --data-dir <dir> --session-id <id> --articles <path>')
-    console.error('  npx tsx src/pipeline/publish.ts execute --data-dir <dir> --session-id <id> --articles <path> --decisions <path>')
+  const token = resolveGitHubToken()
+  const octokit = new Octokit({ auth: token })
+
+  try {
+    if (command === 'prepare-match') {
+      await prepareMatch(octokit, getArg(args, 'session-id'), getArg(args, 'articles'))
+    } else {
+      await execute(
+        octokit,
+        getArg(args, 'session-id'),
+        getArg(args, 'articles'),
+        getArg(args, 'decisions'),
+      )
+    }
+  } catch (e) {
+    const msg = (e as Error).message ?? String(e)
+    process.stderr.write(`publish failed: ${msg}\n`)
     process.exit(1)
   }
 }
 
-main()
+const isMain = (() => {
+  try {
+    const argv1 = process.argv[1]
+    if (!argv1) return false
+    return argv1.endsWith('publish.ts') || argv1.endsWith('publish.js')
+  } catch {
+    return false
+  }
+})()
+
+if (isMain) {
+  main()
+}

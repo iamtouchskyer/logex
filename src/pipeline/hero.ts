@@ -10,9 +10,11 @@
  * Agent B owns the skill.md migration; the orchestrator will resolve in merge.
  */
 
-import { access } from 'node:fs/promises'
-import { homedir } from 'node:os'
+import { access, readFile, readdir, rm } from 'node:fs/promises'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { mkdtempSync } from 'node:fs'
+import { spawn } from 'node:child_process'
 import { GRADIENTS, DEFAULT_GRADIENT } from '../lib/gradients'
 
 export interface HeroImage {
@@ -103,28 +105,117 @@ export async function generateGradientHero(
   return { data: Buffer.from(svg, 'utf-8'), mime: 'image/svg+xml' }
 }
 
-/** Detect whether image-x is usable. */
+/**
+ * Detect whether image-x is usable.
+ * Requires (a) the skill dir exists, (b) DASHSCOPE_API_KEY is present
+ * (checks process.env, then ~/.claude/.env).
+ */
 export async function detectImageX(
   env: NodeJS.ProcessEnv = process.env,
   accessFn: (p: string) => Promise<void> = access,
 ): Promise<boolean> {
   if (env.LOGEX_IMAGE_X === 'false') return false
-  const path = join(homedir(), '.claude', 'skills', 'image-x')
+  const scriptPath = join(homedir(), '.claude', 'skills', 'image-x', 'scripts', 'generate_image.py')
   try {
-    await accessFn(path)
-    return true
+    await accessFn(scriptPath)
   } catch {
     return false
   }
+  if (await resolveDashscopeKey(env)) return true
+  return false
 }
 
-/** Attempt image-x generation. Currently a stub that signals "unavailable"
- *  by throwing — real integration will spawn the skill's CLI. */
+/** Look up DASHSCOPE_API_KEY in env, falling back to ~/.claude/.env. */
+async function resolveDashscopeKey(env: NodeJS.ProcessEnv = process.env): Promise<string | null> {
+  if (env.DASHSCOPE_API_KEY) return env.DASHSCOPE_API_KEY
+  try {
+    const envPath = join(homedir(), '.claude', '.env')
+    const raw = await readFile(envPath, 'utf-8')
+    for (const line of raw.split('\n')) {
+      const m = line.match(/^\s*DASHSCOPE_API_KEY\s*=\s*(.*?)\s*$/)
+      if (m) {
+        return m[1].replace(/^["']|["']$/g, '')
+      }
+    }
+  } catch { /* ignore */ }
+  return null
+}
+
+/**
+ * Generate a hero image via image-x (DashScope). Spawns the skill's
+ * generate_image.py script into a temp dir, reads the produced PNG,
+ * and returns it as a Buffer. Throws if the skill is unavailable or
+ * generation times out.
+ */
 export async function generateWithImageX(
-  _slug: string, // eslint-disable-line @typescript-eslint/no-unused-vars
-  _title: string, // eslint-disable-line @typescript-eslint/no-unused-vars
+  slug: string,
+  title: string,
+  opts: {
+    model?: string
+    size?: string
+    timeoutMs?: number
+    scriptPath?: string
+    env?: NodeJS.ProcessEnv
+  } = {},
 ): Promise<HeroImage> {
-  throw new Error('image-x generation not yet implemented')
+  const env = opts.env ?? process.env
+  const key = await resolveDashscopeKey(env)
+  if (!key) throw new Error('DASHSCOPE_API_KEY not set')
+
+  const scriptPath = opts.scriptPath
+    ?? join(homedir(), '.claude', 'skills', 'image-x', 'scripts', 'generate_image.py')
+  const model = opts.model ?? 'wanx2.1-t2i-turbo'
+  const size = opts.size ?? '1200*630'
+  const timeoutMs = opts.timeoutMs ?? 120_000
+
+  const prompt =
+    `Minimalist, dark-themed abstract illustration for a technical blog post titled "${title.slice(0, 160)}". `
+    + `Style: geometric shapes, subtle gradient, developer aesthetic, high contrast. `
+    + `No text in the image. Clean, modern, editorial.`
+
+  const outDir = mkdtempSync(join(tmpdir(), `logex-hero-${slug}-`))
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const child = spawn(
+        'python3',
+        [
+          scriptPath,
+          prompt,
+          '--model', model,
+          '--size', size,
+          '--output', outDir,
+          '--api-key', key,
+          '--timeout', String(Math.floor(timeoutMs / 1000)),
+        ],
+        { stdio: ['ignore', 'pipe', 'pipe'] },
+      )
+      let stderr = ''
+      child.stderr?.on('data', (d) => { stderr += d.toString() })
+      child.stdout?.on('data', () => { /* drain */ })
+      const killer = setTimeout(() => {
+        child.kill('SIGTERM')
+        reject(new Error(`image-x timed out after ${timeoutMs}ms`))
+      }, timeoutMs)
+      child.on('close', (code) => {
+        clearTimeout(killer)
+        if (code === 0) resolve()
+        else reject(new Error(`image-x exited ${code}: ${stderr.slice(-500)}`))
+      })
+      child.on('error', (err) => {
+        clearTimeout(killer)
+        reject(err)
+      })
+    })
+
+    const entries = await readdir(outDir)
+    const png = entries.find((f) => f.toLowerCase().endsWith('.png'))
+    if (!png) throw new Error(`image-x produced no PNG in ${outDir} (got: ${entries.join(',')})`)
+    const data = await readFile(join(outDir, png))
+    return { data, mime: 'image/png' }
+  } finally {
+    try { await rm(outDir, { recursive: true, force: true }) } catch { /* ignore */ }
+  }
 }
 
 /** Top-level entry: image-x if available & working, else gradient. */
