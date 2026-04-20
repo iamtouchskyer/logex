@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { Octokit } from '@octokit/rest'
-import { resolveGitHubToken } from '../lib/github-token.js'
+import { resolveGitHubToken, maskToken } from '../lib/github-token.js'
 import type { Lang } from './types.js'
 import { generateHeroImage } from './hero.js'
 
@@ -47,9 +47,36 @@ export class BlobTooLargeError extends Error {
 export class SHAConflictError extends Error {
   constructor() {
     super(
-      'upstream index.json changed — try again (ref updateRef returned 409 after max retries)',
+      'upstream changed faster than we could rebase — exhausted retries after re-fetching index.json each iteration',
     )
     this.name = 'SHAConflictError'
+  }
+}
+
+export class RateLimitedError extends Error {
+  constructor(
+    public readonly resetAt: Date | null,
+    public readonly retryAfterSec: number | null,
+  ) {
+    const when = resetAt
+      ? `at ${resetAt.toISOString()}`
+      : retryAfterSec != null
+        ? `in ${retryAfterSec}s`
+        : 'later (no reset header seen)'
+    super(
+      `GitHub rate limit exceeded — retry ${when}. Not auto-retrying; rerun once the window resets.`,
+    )
+    this.name = 'RateLimitedError'
+  }
+}
+
+export class InsufficientScopeError extends Error {
+  constructor(public readonly scopes: string) {
+    super(
+      `GitHub token is missing required 'repo' scope (token scopes: '${scopes}'). `
+      + 'Regenerate a classic PAT with repo scope at https://github.com/settings/tokens/new',
+    )
+    this.name = 'InsufficientScopeError'
   }
 }
 
@@ -200,31 +227,69 @@ export async function fetchIndex(octokit: OctokitLike): Promise<IndexFile> {
 }
 
 /**
- * Commit a batch of files to the data repo as a single atomic commit.
- * Pre-validates blob sizes. Retries on 409 ref conflict up to MAX_REF_RETRIES
- * times by rebuilding the tree on the new parent.
+ * Inspect a 403-flavoured Octokit error and return a typed error when the
+ * shape matches (rate limit, missing scope). Returns null if no special
+ * handling applies — caller should rethrow the original.
+ */
+export function classifyGitHubError(e: unknown): Error | null {
+  const err = e as {
+    status?: number
+    response?: { headers?: Record<string, string | undefined> }
+    message?: string
+  }
+  if (err?.status !== 403) return null
+  const headers = err.response?.headers ?? {}
+  const remaining = headers['x-ratelimit-remaining']
+  const resetRaw = headers['x-ratelimit-reset']
+  const retryAfter = headers['retry-after']
+  const msg = err.message ?? ''
+  if (remaining === '0' || retryAfter || /rate limit/i.test(msg)) {
+    const resetAt = resetRaw ? new Date(Number(resetRaw) * 1000) : null
+    const retryAfterSec = retryAfter ? Number(retryAfter) : null
+    return new RateLimitedError(resetAt, retryAfterSec)
+  }
+  const scopes = headers['x-oauth-scopes']
+  if (typeof scopes === 'string') {
+    const list = scopes.split(',').map((s) => s.trim()).filter(Boolean)
+    if (!list.includes('repo')) return new InsufficientScopeError(scopes)
+  }
+  return null
+}
+
+/**
+ * Single-attempt commit of a batch of files as one atomic commit.
+ * Pre-validates blob sizes. Rethrows 409 so caller can retry with a fresh
+ * parent. Throws `RateLimitedError` / `InsufficientScopeError` for
+ * recognisable 403 shapes instead of opaque error bodies.
+ *
+ * Callers that need to rebuild the tree on conflict should drive the retry
+ * themselves (see `publishRun`) so the in-memory state they ship in the
+ * tree (e.g. `index.json`) can be refreshed against the new parent.
  */
 export async function commitBatch(
   octokit: OctokitLike,
   files: FileSpec[],
   message: string,
-): Promise<{ commitSha: string; attempts: number }> {
+  blobShaCache?: Map<string, string>,
+): Promise<{ commitSha: string }> {
   for (const f of files) assertBlobSize(f)
-
-  let attempt = 0
-  while (attempt < MAX_REF_RETRIES) {
-    attempt++
+  try {
     const { sha: parentSha } = await getRef(octokit)
     const baseTreeSha = await getCommitTreeSha(octokit, parentSha)
 
     const blobs = await Promise.all(
       files.map(async (f) => {
+        const cacheKey = `${f.encoding}:${f.content}`
+        if (blobShaCache?.has(cacheKey)) {
+          return { path: f.path, sha: blobShaCache.get(cacheKey)! }
+        }
         const res = await octokit.rest.git.createBlob({
           owner: DATA_REPO_OWNER,
           repo: DATA_REPO_NAME,
           content: f.content,
           encoding: f.encoding === 'utf-8' ? 'utf-8' : 'base64',
         })
+        blobShaCache?.set(cacheKey, res.data.sha)
         return { path: f.path, sha: res.data.sha }
       }),
     )
@@ -249,22 +314,18 @@ export async function commitBatch(
       parents: [parentSha],
     })
 
-    try {
-      await octokit.rest.git.updateRef({
-        owner: DATA_REPO_OWNER,
-        repo: DATA_REPO_NAME,
-        ref: `heads/${DATA_REPO_BRANCH}`,
-        sha: commitRes.data.sha,
-      })
-      return { commitSha: commitRes.data.sha, attempts: attempt }
-    } catch (e) {
-      const status = (e as { status?: number }).status
-      if (status !== 409) throw e
-      if (attempt >= MAX_REF_RETRIES) throw new SHAConflictError()
-      // loop again with fresh parent
-    }
+    await octokit.rest.git.updateRef({
+      owner: DATA_REPO_OWNER,
+      repo: DATA_REPO_NAME,
+      ref: `heads/${DATA_REPO_BRANCH}`,
+      sha: commitRes.data.sha,
+    })
+    return { commitSha: commitRes.data.sha }
+  } catch (e) {
+    const classified = classifyGitHubError(e)
+    if (classified) throw classified
+    throw e
   }
-  throw new SHAConflictError()
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────
@@ -418,16 +479,96 @@ export interface PublishRunResult {
   filesCommitted: number
 }
 
+interface PreparedArticle {
+  dec: MatchDecision
+  article: NewArticle
+  slug: string
+  articleDate: string
+  primaryLang: Lang
+  i18nMap: Partial<Record<Lang, LangMeta>>
+  preservedHeroImage: string
+  preservedStats: Record<string, unknown>
+  preservedDuration: string
+  isUpdate: boolean
+  existingSlug?: string
+}
+
+/**
+ * Merge prepared article entries into a fresh-from-remote `IndexFile`.
+ * Pure function — call once per retry iteration with a freshly fetched
+ * index so any concurrent writer's entries are preserved.
+ */
+export function mergeIndex(
+  index: IndexFile,
+  prepared: PreparedArticle[],
+  sessionId: string,
+  date: string,
+): { index: IndexFile; results: PublishRunResult['results'] } {
+  const results: PublishRunResult['results'] = []
+  for (const p of prepared) {
+    const entry: ExistingArticleMeta = {
+      slug: p.slug,
+      date: p.articleDate,
+      project: p.article.project ?? '',
+      tags: p.article.tags,
+      sessionId,
+      heroImage: p.preservedHeroImage,
+      chunkIndices: p.article.chunkIndices,
+      duration: p.preservedDuration,
+      stats: p.preservedStats,
+      primaryLang: p.primaryLang,
+      i18n: p.i18nMap,
+    }
+
+    let existingIdx = -1
+    if (p.isUpdate && p.existingSlug) {
+      existingIdx = index.articles.findIndex((a) => a.slug === p.existingSlug)
+    }
+
+    if (existingIdx !== -1) {
+      const existing = index.articles[existingIdx]
+      const mergedI18n: Partial<Record<Lang, LangMeta>> = { ...(existing.i18n ?? {}) }
+      for (const [lang, meta] of Object.entries(p.i18nMap) as Array<[Lang, LangMeta]>) {
+        mergedI18n[lang] = meta
+      }
+      entry.i18n = mergedI18n
+      entry.primaryLang = p.article.lang ?? existing.primaryLang ?? p.primaryLang
+      index.articles[existingIdx] = entry
+      results.push({
+        slug: p.slug, action: 'updated', title: p.article.title,
+        langs: Object.keys(mergedI18n) as Lang[],
+      })
+    } else {
+      index.articles.push(entry)
+      results.push({
+        slug: p.slug, action: 'inserted', title: p.article.title,
+        langs: Object.keys(p.i18nMap) as Lang[],
+      })
+    }
+  }
+
+  index.articles.sort((a, b) => (b.slug > a.slug ? 1 : -1))
+  const seen = new Set<string>()
+  index.articles = index.articles.filter((a) => {
+    if (seen.has(a.slug)) return false
+    seen.add(a.slug)
+    return true
+  })
+  index.lastUpdated = date
+  return { index, results }
+}
+
 export async function publishRun(input: PublishRunInput): Promise<PublishRunResult> {
-  const { octokit, sessionId, index, newArticles, decisions } = input
+  const { octokit, sessionId, newArticles, decisions } = input
+  let { index } = input
 
   // Fail fast: enforce bilingual invariant BEFORE committing anything.
   newArticles.forEach((a, i) => assertBilingual(a, i))
 
   const skipHero = process.env.LOGEX_SKIP_HERO === 'true'
   const date = today()
-  const results: PublishRunResult['results'] = []
-  const fileSpecs: FileSpec[] = []
+  const articleFileSpecs: FileSpec[] = []
+  const prepared: PreparedArticle[] = []
 
   for (const dec of decisions) {
     const article = newArticles[dec.newIndex]
@@ -445,10 +586,9 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
     let preservedStats: Record<string, unknown> = (article.stats as Record<string, unknown>) ?? {}
     let preservedDuration = ''
     let isUpdate = false
-    let existingIdx = -1
 
     if (dec.action === 'update' && dec.existingSlug) {
-      existingIdx = index.articles.findIndex((a) => a.slug === dec.existingSlug)
+      const existingIdx = index.articles.findIndex((a) => a.slug === dec.existingSlug)
       if (existingIdx === -1) {
         process.stderr.write(`Warning: existing slug "${dec.existingSlug}" not found, treating as insert\n`)
       } else {
@@ -469,7 +609,7 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
 
     if (article.heroImageBase64) {
       const imgPath = `images/${slug!}.png`
-      fileSpecs.push({ path: imgPath, content: article.heroImageBase64, encoding: 'base64' })
+      articleFileSpecs.push({ path: imgPath, content: article.heroImageBase64, encoding: 'base64' })
       preservedHeroImage = `/${imgPath}`
     } else if (!skipHero && (!preservedHeroImage || preservedHeroImage.trim() === '')) {
       try {
@@ -478,7 +618,7 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
           : img.mime === 'image/svg+xml' ? 'svg'
           : 'png'
         const imgPath = `images/${slug!}.${ext}`
-        fileSpecs.push({
+        articleFileSpecs.push({
           path: imgPath,
           content: img.data.toString('base64'),
           encoding: 'base64',
@@ -509,7 +649,7 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
         duration: preservedDuration,
         stats: preservedStats,
       }
-      fileSpecs.push({
+      articleFileSpecs.push({
         path: relPath,
         content: JSON.stringify(articleData, null, 2),
         encoding: 'utf-8',
@@ -517,116 +657,150 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
       i18nMap[lang] = { title: content.title, summary: content.summary, path: relPath }
     }
 
-    const entry: ExistingArticleMeta = {
-      slug: slug!,
-      date: articleDate!,
-      project: article.project ?? '',
-      tags: article.tags,
-      sessionId,
-      heroImage: preservedHeroImage,
-      chunkIndices: article.chunkIndices,
-      duration: preservedDuration,
-      stats: preservedStats,
-      primaryLang,
-      i18n: i18nMap,
-    }
-
-    if (isUpdate && existingIdx !== -1) {
-      const existing = index.articles[existingIdx]
-      const mergedI18n: Partial<Record<Lang, LangMeta>> = { ...(existing.i18n ?? {}) }
-      for (const [lang, meta] of Object.entries(i18nMap) as Array<[Lang, LangMeta]>) {
-        mergedI18n[lang] = meta
-      }
-      entry.i18n = mergedI18n
-      entry.primaryLang = article.lang ?? existing.primaryLang ?? primaryLang
-      index.articles[existingIdx] = entry
-      results.push({
-        slug: slug!,
-        action: 'updated',
-        title: article.title,
-        langs: Object.keys(mergedI18n) as Lang[],
-      })
-    } else {
-      index.articles.push(entry)
-      results.push({
-        slug: slug!,
-        action: 'inserted',
-        title: article.title,
-        langs: Object.keys(i18nMap) as Lang[],
-      })
-    }
+    prepared.push({
+      dec, article,
+      slug: slug!, articleDate: articleDate!,
+      primaryLang, i18nMap,
+      preservedHeroImage, preservedStats, preservedDuration,
+      isUpdate, existingSlug: dec.existingSlug,
+    })
   }
 
-  index.articles.sort((a, b) => (b.slug > a.slug ? 1 : -1))
-  const seen = new Set<string>()
-  index.articles = index.articles.filter((a) => {
-    if (seen.has(a.slug)) return false
-    seen.add(a.slug)
-    return true
-  })
-  index.lastUpdated = date
+  // sessionId injection on entry — mergeIndex stamps sessionId directly.
 
-  fileSpecs.push({
-    path: 'index.json',
-    content: JSON.stringify(index, null, 2),
-    encoding: 'utf-8',
-  })
+  // Retry loop: on 409, re-fetch index and re-merge before rebuilding the
+  // commit. Article blobs are content-addressed so we cache their SHAs
+  // across attempts (S2).
+  const blobShaCache = new Map<string, string>()
+  let results: PublishRunResult['results'] = []
+  let finalFileCount = 0
+  let finalTotalArticles = 0
 
-  const articleCount = results.length
-  const message = `articles: ${articleCount} from session ${sessionId}`
-  const { commitSha } = await commitBatch(octokit, fileSpecs, message)
+  for (let attempt = 1; attempt <= MAX_REF_RETRIES; attempt++) {
+    const mergeResult = mergeIndex(index, prepared, sessionId, date)
+    results = mergeResult.results
 
-  return {
-    results,
-    totalArticles: index.articles.length,
-    commitSha,
-    filesCommitted: fileSpecs.length,
+    const fileSpecs: FileSpec[] = [
+      ...articleFileSpecs,
+      {
+        path: 'index.json',
+        content: JSON.stringify(mergeResult.index, null, 2),
+        encoding: 'utf-8',
+      },
+    ]
+    finalFileCount = fileSpecs.length
+    finalTotalArticles = mergeResult.index.articles.length
+
+    const message = `articles: ${results.length} from session ${sessionId}`
+    try {
+      const { commitSha } = await commitBatch(octokit, fileSpecs, message, blobShaCache)
+      return { results, totalArticles: finalTotalArticles, commitSha, filesCommitted: finalFileCount }
+    } catch (e) {
+      const status = (e as { status?: number }).status
+      if (status !== 409) throw e
+      if (attempt >= MAX_REF_RETRIES) break
+      // Re-fetch index.json from current tip and re-run the merge.
+      index = await fetchIndex(octokit)
+    }
   }
+  throw new SHAConflictError()
 }
 
 // ─── CLI ─────────────────────────────────────────────────────────────
 
-function getArg(args: string[], name: string): string {
-  const idx = args.indexOf(`--${name}`)
-  if (idx === -1 || !args[idx + 1]) {
-    process.stderr.write(`Missing required argument: --${name}\n`)
-    process.exit(1)
+export interface CliIO {
+  argv: string[]
+  stderr: (s: string) => void
+  stdout?: (s: string) => void
+  exit: (code: number) => never
+  resolveToken?: () => string
+  makeOctokit?: (token: string) => OctokitLike
+}
+
+export function parseArgv(args: string[]):
+  | { kind: 'usage' }
+  | { kind: 'prepare-match'; sessionId: string; articles: string }
+  | { kind: 'execute'; sessionId: string; articles: string; decisions: string }
+  | { kind: 'missing'; name: string }
+{
+  const command = args[0]
+  if (command !== 'prepare-match' && command !== 'execute') return { kind: 'usage' }
+  const pick = (name: string): string | null => {
+    const idx = args.indexOf(`--${name}`)
+    if (idx === -1 || !args[idx + 1]) return null
+    return args[idx + 1]
   }
-  return args[idx + 1]
+  const sessionId = pick('session-id')
+  if (!sessionId) return { kind: 'missing', name: 'session-id' }
+  const articles = pick('articles')
+  if (!articles) return { kind: 'missing', name: 'articles' }
+  if (command === 'prepare-match') {
+    return { kind: 'prepare-match', sessionId, articles }
+  }
+  const decisions = pick('decisions')
+  if (!decisions) return { kind: 'missing', name: 'decisions' }
+  return { kind: 'execute', sessionId, articles, decisions }
+}
+
+/**
+ * Redact any token-shaped substring from an error message before it hits
+ * stderr. Masks `ghp_...`, `github_pat_...`, `gho_...`, `ghs_...` and raw
+ * 40-char hex (legacy PAT) segments. Relies on `maskToken` so both
+ * producers share one code path.
+ */
+export function redactTokensInMessage(msg: string): string {
+  return msg.replace(/(github_pat_[A-Za-z0-9_]+|gh[posru]_[A-Za-z0-9]+|\b[a-f0-9]{40}\b)/g, (m) => maskToken(m))
+}
+
+/**
+ * Pure CLI tail. Runs the parse / dispatch path with injected IO so it
+ * is unit-testable. Calls `io.exit` on terminal paths — keep it typed
+ * `never` so type checks remain strict downstream.
+ */
+export async function runCli(io: CliIO): Promise<void> {
+  const parsed = parseArgv(io.argv)
+  if (parsed.kind === 'usage') {
+    io.stderr('Usage:\n')
+    io.stderr('  npx tsx src/pipeline/publish.ts prepare-match --session-id <id> --articles <path>\n')
+    io.stderr('  npx tsx src/pipeline/publish.ts execute --session-id <id> --articles <path> --decisions <path>\n')
+    io.exit(1)
+  }
+  if (parsed.kind === 'missing') {
+    io.stderr(`Missing required argument: --${parsed.name}\n`)
+    io.exit(1)
+  }
+
+  try {
+    const token = (io.resolveToken ?? resolveGitHubToken)()
+    const octokit: OctokitLike = io.makeOctokit
+      ? io.makeOctokit(token)
+      : (new Octokit({ auth: token }) as OctokitLike)
+
+    if (parsed.kind === 'prepare-match') {
+      await prepareMatch(octokit, parsed.sessionId, parsed.articles)
+    } else if (parsed.kind === 'execute') {
+      await execute(octokit, parsed.sessionId, parsed.articles, parsed.decisions)
+    }
+  } catch (e) {
+    const rawMsg = (e as Error).message ?? String(e)
+    const safe = redactTokensInMessage(rawMsg)
+    io.stderr(`publish failed: ${safe}\n`)
+    io.exit(1)
+  }
 }
 
 export async function main(): Promise<void> {
-  const args = process.argv.slice(2)
-  const command = args[0]
-
-  if (command !== 'prepare-match' && command !== 'execute') {
-    process.stderr.write('Usage:\n')
-    process.stderr.write('  npx tsx src/pipeline/publish.ts prepare-match --session-id <id> --articles <path>\n')
-    process.stderr.write('  npx tsx src/pipeline/publish.ts execute --session-id <id> --articles <path> --decisions <path>\n')
-    process.exit(1)
-  }
-
-  const token = resolveGitHubToken()
-  const octokit = new Octokit({ auth: token })
-
-  try {
-    if (command === 'prepare-match') {
-      await prepareMatch(octokit, getArg(args, 'session-id'), getArg(args, 'articles'))
-    } else {
-      await execute(
-        octokit,
-        getArg(args, 'session-id'),
-        getArg(args, 'articles'),
-        getArg(args, 'decisions'),
-      )
-    }
-  } catch (e) {
-    const msg = (e as Error).message ?? String(e)
-    process.stderr.write(`publish failed: ${msg}\n`)
-    process.exit(1)
-  }
+  /* v8 ignore start */
+  await runCli({
+    argv: process.argv.slice(2),
+    stderr: (s) => { process.stderr.write(s) },
+    stdout: (s) => { process.stdout.write(s) },
+    exit: (code) => process.exit(code),
+  })
+  /* v8 ignore stop */
 }
 
+/* v8 ignore start -- module bootstrap; exercised only when run as CLI */
 const isMain = (() => {
   try {
     const argv1 = process.argv[1]
@@ -640,3 +814,4 @@ const isMain = (() => {
 if (isMain) {
   main()
 }
+/* v8 ignore stop */

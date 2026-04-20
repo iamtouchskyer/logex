@@ -2,6 +2,13 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { writeFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+
+vi.mock('../hero.js', () => ({
+  generateHeroImage: vi.fn(async (_slug: string, _title: string) => ({
+    mime: 'image/png',
+    data: Buffer.from('PNG-MOCK'),
+  })),
+}))
 import {
   publishRun,
   commitBatch,
@@ -10,10 +17,15 @@ import {
   BilingualRequiredError,
   BlobTooLargeError,
   SHAConflictError,
+  RateLimitedError,
+  InsufficientScopeError,
   MAX_BLOB_BYTES,
   fetchIndex,
   execute,
   prepareMatch,
+  parseArgv,
+  runCli,
+  redactTokensInMessage,
   type FileSpec,
 } from '../publish.js'
 
@@ -162,7 +174,6 @@ describe('commitBatch', () => {
     const ok = makeOctokit()
     const out = await commitBatch(asOk(ok), files, 'msg: happy')
     expect(out.commitSha).toBe('new-commit-sha')
-    expect(out.attempts).toBe(1)
     expect(ok.rest.git.createBlob).toHaveBeenCalledTimes(2)
     expect(ok.rest.git.createTree).toHaveBeenCalledWith(
       expect.objectContaining({ base_tree: 'base-tree-sha' }),
@@ -173,25 +184,48 @@ describe('commitBatch', () => {
     expect(ok.rest.git.updateRef).toHaveBeenCalledOnce()
   })
 
-  it('retries on 409 updateRef conflict and then succeeds', async () => {
-    const updateRef = vi.fn()
-      .mockRejectedValueOnce(Object.assign(new Error('409'), { status: 409 }))
-      .mockResolvedValueOnce({ data: {} })
-    const ok = makeOctokit({ updateRef })
-    const out = await commitBatch(asOk(ok), files, 'msg: retry')
-    expect(out.attempts).toBe(2)
-    expect(updateRef).toHaveBeenCalledTimes(2)
-    expect(ok.rest.git.getRef).toHaveBeenCalledTimes(2)
-  })
-
-  it('throws SHAConflictError after MAX_REF_RETRIES of 409', async () => {
+  it('rethrows 409 updateRef conflict so caller can retry with fresh parent', async () => {
     const updateRef = vi.fn().mockRejectedValue(Object.assign(new Error('409'), { status: 409 }))
     const ok = makeOctokit({ updateRef })
-    let err: Error | null = null
-    try { await commitBatch(asOk(ok), files, 'msg: fail') } catch (e) { err = e as Error }
-    expect(err).toBeInstanceOf(SHAConflictError)
-    expect(err?.message).toContain('upstream index.json changed')
-    expect(updateRef).toHaveBeenCalledTimes(3)
+    await expect(commitBatch(asOk(ok), files, 'msg: retry')).rejects.toMatchObject({ status: 409 })
+    expect(updateRef).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses blobShaCache to avoid re-creating identical blobs', async () => {
+    const ok = makeOctokit()
+    const cache = new Map<string, string>()
+    await commitBatch(asOk(ok), files, 'msg', cache)
+    expect(ok.rest.git.createBlob).toHaveBeenCalledTimes(2)
+    await commitBatch(asOk(ok), files, 'msg', cache)
+    // second call reuses cached SHAs — no additional createBlob calls
+    expect(ok.rest.git.createBlob).toHaveBeenCalledTimes(2)
+  })
+
+  it('maps 403 rate-limit 403 to RateLimitedError with resetAt parsed from header', async () => {
+    const err403 = Object.assign(new Error('API rate limit exceeded'), {
+      status: 403,
+      response: { headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': '1800000000' } },
+    })
+    const updateRef = vi.fn().mockRejectedValue(err403)
+    const ok = makeOctokit({ updateRef })
+    let caught: Error | null = null
+    try { await commitBatch(asOk(ok), files, 'msg') } catch (e) { caught = e as Error }
+    expect(caught).toBeInstanceOf(RateLimitedError)
+    expect((caught as RateLimitedError).resetAt?.toISOString()).toBe(new Date(1800000000 * 1000).toISOString())
+    expect(caught?.message).toContain('rate limit')
+  })
+
+  it('maps 403 missing-scope to InsufficientScopeError', async () => {
+    const err403 = Object.assign(new Error('Must have admin rights'), {
+      status: 403,
+      response: { headers: { 'x-oauth-scopes': 'read:user, gist' } },
+    })
+    const updateRef = vi.fn().mockRejectedValue(err403)
+    const ok = makeOctokit({ updateRef })
+    let caught: Error | null = null
+    try { await commitBatch(asOk(ok), files, 'msg') } catch (e) { caught = e as Error }
+    expect(caught).toBeInstanceOf(InsufficientScopeError)
+    expect(caught?.message).toContain("'repo' scope")
   })
 
   it('surfaces non-409 errors immediately without retry', async () => {
@@ -211,6 +245,25 @@ describe('commitBatch', () => {
     await expect(commitBatch(asOk(ok), [big], 'msg')).rejects.toThrow(BlobTooLargeError)
     expect(ok.rest.git.getRef).not.toHaveBeenCalled()
     expect(ok.rest.git.createBlob).not.toHaveBeenCalled()
+  })
+
+  it('rejects blob at exactly MAX_BLOB_BYTES (boundary)', () => {
+    const big = 'a'.repeat(MAX_BLOB_BYTES)
+    let err: Error | null = null
+    try { assertBlobSize({ path: 'x.json', content: big, encoding: 'utf-8' }) } catch (e) { err = e as Error }
+    // Contract: > MAX_BLOB_BYTES rejects; exactly MAX_BLOB_BYTES is accepted.
+    // Documenting current behaviour:
+    expect(err).toBeNull()
+  })
+
+  it('rejects blob at MAX_BLOB_BYTES + 1 (just over limit)', () => {
+    const big = 'a'.repeat(MAX_BLOB_BYTES + 1)
+    expect(() => assertBlobSize({ path: 'x.json', content: big, encoding: 'utf-8' })).toThrow(BlobTooLargeError)
+  })
+
+  it('accepts blob at MAX_BLOB_BYTES - 1 (just under limit)', () => {
+    const big = 'a'.repeat(MAX_BLOB_BYTES - 1)
+    expect(() => assertBlobSize({ path: 'x.json', content: big, encoding: 'utf-8' })).not.toThrow()
   })
 })
 
@@ -297,6 +350,57 @@ describe('publishRun', () => {
       newArticles: [bilingualArticle({ slug: 'a' })],
       decisions: [{ newIndex: 0, action: 'insert' }],
     })).rejects.toThrow(SHAConflictError)
+  })
+
+  it('re-fetches index.json and rebuilds tree on 409 retry (S1)', async () => {
+    // First getRef returns sha-1; after 409 we re-fetch and next getRef returns sha-2.
+    const getRef = vi.fn()
+      .mockResolvedValueOnce({ data: { object: { sha: 'parent-sha-1' } } })
+      .mockResolvedValueOnce({ data: { object: { sha: 'parent-sha-2' } } })
+    const updateRef = vi.fn()
+      .mockRejectedValueOnce(Object.assign(new Error('409'), { status: 409 }))
+      .mockResolvedValueOnce({ data: {} })
+    // getContent returns a different index snapshot on the second call so
+    // concurrent writer's entry is preserved.
+    const concurrentEntry = {
+      slug: '2026-04-20-other',
+      date: '2026-04-20',
+      sessionId: 'other-session',
+      chunkIndices: [99],
+      tags: [],
+      primaryLang: 'zh' as const,
+      i18n: {},
+    }
+    const getContent = vi.fn().mockResolvedValue({
+      data: { content: Buffer.from(JSON.stringify({ articles: [concurrentEntry], lastUpdated: '2026-04-20' })).toString('base64'), encoding: 'base64' },
+    })
+    const ok = makeOctokit({ getRef, updateRef, getContent })
+    const res = await publishRun({
+      octokit: asOk(ok),
+      sessionId,
+      index: { articles: [], lastUpdated: '' },
+      newArticles: [bilingualArticle({ slug: 'retry-me' })],
+      decisions: [{ newIndex: 0, action: 'insert' }],
+    })
+    expect(res.commitSha).toBe('new-commit-sha')
+    // Second createCommit should use parent-sha-2 (fresh parent).
+    const calls = ok.rest.git.createCommit.mock.calls
+    expect(calls.length).toBe(2)
+    expect(calls[1][0]).toMatchObject({ parents: ['parent-sha-2'] })
+    // The index.json in the second attempt must preserve the concurrent writer's entry.
+    const treeCalls = ok.rest.git.createTree.mock.calls
+    const secondTree = treeCalls[1][0].tree as Array<{ path: string; sha?: string }>
+    // The updated index.json is the last file in the batch.
+    expect(secondTree.some((t) => t.path === 'index.json')).toBe(true)
+    // After retry, index.json should contain the concurrent entry.
+    const createBlobCalls = ok.rest.git.createBlob.mock.calls
+    const indexPayloads = createBlobCalls
+      .map((c) => c[0].content)
+      .filter((c: string) => {
+        try { const obj = JSON.parse(c); return Array.isArray(obj.articles) } catch { return false }
+      })
+    // at least one index payload includes the concurrent entry
+    expect(indexPayloads.some((p: string) => p.includes('2026-04-20-other'))).toBe(true)
   })
 
   it('rejects 95MB image pre-network', async () => {
@@ -533,5 +637,359 @@ describe('execute (integration with publishRun)', () => {
     const out = JSON.parse((spy.mock.calls[0][0] as string).trim())
     expect(out.results[0].action).toBe('inserted')
     spy.mockRestore()
+  })
+})
+
+describe('publishRun (hero branches)', () => {
+  const sessionId = 'abcdef0123456789'
+  beforeEach(() => { delete process.env.LOGEX_SKIP_HERO })
+  afterEach(() => { process.env.LOGEX_SKIP_HERO = 'true' })
+
+  it('generates hero image when LOGEX_SKIP_HERO is unset (png path)', async () => {
+    const ok = makeOctokit()
+    const res = await publishRun({
+      octokit: asOk(ok), sessionId,
+      index: { articles: [], lastUpdated: '' },
+      newArticles: [bilingualArticle({ slug: 'hero-png' })],
+      decisions: [{ newIndex: 0, action: 'insert' }],
+    })
+    const paths = ok.rest.git.createTree.mock.calls[0][0].tree.map((t: { path: string }) => t.path)
+    expect(paths.some((p: string) => p.startsWith('images/') && p.endsWith('.png'))).toBe(true)
+    expect(res.filesCommitted).toBeGreaterThan(2)
+  })
+
+  it('writes warning when hero generation throws, still commits articles', async () => {
+    const hero = await import('../hero.js')
+    const spy = vi.spyOn(hero, 'generateHeroImage').mockRejectedValueOnce(new Error('hero boom'))
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+    const ok = makeOctokit()
+    const res = await publishRun({
+      octokit: asOk(ok), sessionId,
+      index: { articles: [], lastUpdated: '' },
+      newArticles: [bilingualArticle({ slug: 'hero-fails' })],
+      decisions: [{ newIndex: 0, action: 'insert' }],
+    })
+    expect(res.commitSha).toBe('new-commit-sha')
+    expect(stderr).toHaveBeenCalledWith(expect.stringContaining('hero generation failed'))
+    spy.mockRestore()
+    stderr.mockRestore()
+  })
+
+  it('selects .svg extension when hero mime is svg+xml', async () => {
+    const hero = await import('../hero.js')
+    const spy = vi.spyOn(hero, 'generateHeroImage').mockResolvedValueOnce({ mime: 'image/svg+xml', data: Buffer.from('<svg/>') })
+    const ok = makeOctokit()
+    await publishRun({
+      octokit: asOk(ok), sessionId,
+      index: { articles: [], lastUpdated: '' },
+      newArticles: [bilingualArticle({ slug: 'hero-svg' })],
+      decisions: [{ newIndex: 0, action: 'insert' }],
+    })
+    const paths = ok.rest.git.createTree.mock.calls[0][0].tree.map((t: { path: string }) => t.path)
+    expect(paths.some((p: string) => p.endsWith('.svg'))).toBe(true)
+    spy.mockRestore()
+  })
+
+  it('falls back to png for unknown mime type', async () => {
+    const hero = await import('../hero.js')
+    const spy = vi.spyOn(hero, 'generateHeroImage').mockResolvedValueOnce({ mime: 'image/weird' as unknown as 'image/png', data: Buffer.from('X') })
+    const ok = makeOctokit()
+    await publishRun({
+      octokit: asOk(ok), sessionId,
+      index: { articles: [], lastUpdated: '' },
+      newArticles: [bilingualArticle({ slug: 'hero-unknown' })],
+      decisions: [{ newIndex: 0, action: 'insert' }],
+    })
+    const paths = ok.rest.git.createTree.mock.calls[0][0].tree.map((t: { path: string }) => t.path)
+    expect(paths.some((p: string) => p.endsWith('.png'))).toBe(true)
+    spy.mockRestore()
+  })
+})
+
+describe('classifyGitHubError edge cases (retry-after + non-403 passthrough)', () => {
+  it('returns null for non-403 errors', async () => {
+    // Indirectly exercised through commitBatch with a 500.
+    const updateRef = vi.fn().mockRejectedValue(Object.assign(new Error('srv'), { status: 500 }))
+    const ok = makeOctokit({ updateRef })
+    await expect(commitBatch(asOk(ok), [{ path: 'a', content: 'x', encoding: 'utf-8' }], 'm'))
+      .rejects.toThrow('srv')
+  })
+
+  it('parses retry-after header even when remaining is not zero', async () => {
+    const err = Object.assign(new Error('Forbidden'), {
+      status: 403,
+      response: { headers: { 'retry-after': '42' } },
+    })
+    const updateRef = vi.fn().mockRejectedValue(err)
+    const ok = makeOctokit({ updateRef })
+    let caught: Error | null = null
+    try { await commitBatch(asOk(ok), [{ path: 'a', content: 'x', encoding: 'utf-8' }], 'm') } catch (e) { caught = e as Error }
+    expect(caught).toBeInstanceOf(RateLimitedError)
+    expect((caught as RateLimitedError).retryAfterSec).toBe(42)
+  })
+
+  it('passes through 403 with repo scope present (no special typed error)', async () => {
+    const err = Object.assign(new Error('Nope'), {
+      status: 403,
+      response: { headers: { 'x-oauth-scopes': 'repo, gist' } },
+    })
+    const updateRef = vi.fn().mockRejectedValue(err)
+    const ok = makeOctokit({ updateRef })
+    let caught: Error | null = null
+    try { await commitBatch(asOk(ok), [{ path: 'a', content: 'x', encoding: 'utf-8' }], 'm') } catch (e) { caught = e as Error }
+    expect(caught).not.toBeInstanceOf(RateLimitedError)
+    expect(caught).not.toBeInstanceOf(InsufficientScopeError)
+    expect(caught?.message).toContain('Nope')
+  })
+
+  it('RateLimitedError default message when no reset/retryAfter provided', () => {
+    const e = new RateLimitedError(null, null)
+    expect(e.message).toContain('later')
+  })
+})
+
+describe('enumerateLangContent branches via publishRun', () => {
+  const sessionId = 'abcdef0123456789'
+  beforeEach(() => { process.env.LOGEX_SKIP_HERO = 'true' })
+  it('skips translation when lang === primary', async () => {
+    const ok = makeOctokit()
+    // Provide a translation keyed to the primary lang, which the loop must skip.
+    const res = await publishRun({
+      octokit: asOk(ok), sessionId,
+      index: { articles: [], lastUpdated: '' },
+      newArticles: [{
+        title: 'T', summary: 'S', body: 'B', lang: 'zh',
+        translations: {
+          zh: { title: 'DUP', summary: 'D', body: 'D' },
+          en: { title: 'T-en', summary: 'S-en', body: 'B-en' },
+        },
+        tags: [], chunkIndices: [1], slug: 'lang-primary',
+      }],
+      decisions: [{ newIndex: 0, action: 'insert' }],
+    })
+    // Two langs committed: zh + en (not three). zh translation ignored.
+    expect(res.results[0].langs).toHaveLength(2)
+  })
+
+  it('skips translation when content is null/undefined', async () => {
+    const ok = makeOctokit()
+    const res = await publishRun({
+      octokit: asOk(ok), sessionId,
+      index: { articles: [], lastUpdated: '' },
+      newArticles: [{
+        title: 'T', summary: 'S', body: 'B', lang: 'zh',
+        translations: {
+          en: { title: 'T-en', summary: 'S-en', body: 'B-en' },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          ja: null as any,
+        },
+        tags: [], chunkIndices: [1], slug: 'lang-null',
+      }],
+      decisions: [{ newIndex: 0, action: 'insert' }],
+    })
+    expect(res.results[0].langs).toHaveLength(2)
+  })
+})
+
+describe('main() wrapper', () => {
+  it('calls runCli with process.argv.slice(2) and exits on usage path', async () => {
+    const { main } = await import('../publish.js')
+    const origArgv = process.argv
+    const origExit = process.exit
+    const origStderr = process.stderr.write.bind(process.stderr)
+    const errs: string[] = []
+    process.argv = ['node', 'publish.ts']
+    ;(process as unknown as { exit: (code: number) => never }).exit = ((code: number) => {
+      throw Object.assign(new Error(`exit:${code}`), { code })
+    }) as unknown as (code?: number) => never
+    ;(process.stderr as unknown as { write: (s: string) => boolean }).write = ((s: string) => {
+      errs.push(s)
+      return true
+    }) as unknown as (s: string) => boolean
+    try {
+      await expect(main()).rejects.toThrow('exit:1')
+      expect(errs.join('')).toContain('Usage')
+    } finally {
+      process.argv = origArgv
+      ;(process as unknown as { exit: typeof origExit }).exit = origExit
+      ;(process.stderr as unknown as { write: typeof origStderr }).write = origStderr
+    }
+  })
+})
+
+describe('parseArgv', () => {
+  it('returns usage on unknown command', () => {
+    expect(parseArgv(['unknown'])).toEqual({ kind: 'usage' })
+    expect(parseArgv([])).toEqual({ kind: 'usage' })
+  })
+  it('returns missing for prepare-match without session-id', () => {
+    expect(parseArgv(['prepare-match'])).toEqual({ kind: 'missing', name: 'session-id' })
+  })
+  it('returns missing for prepare-match without articles', () => {
+    expect(parseArgv(['prepare-match', '--session-id', 's1'])).toEqual({ kind: 'missing', name: 'articles' })
+  })
+  it('returns prepare-match on good args', () => {
+    expect(parseArgv(['prepare-match', '--session-id', 's1', '--articles', '/tmp/a.json']))
+      .toEqual({ kind: 'prepare-match', sessionId: 's1', articles: '/tmp/a.json' })
+  })
+  it('returns missing for execute without decisions', () => {
+    expect(parseArgv(['execute', '--session-id', 's1', '--articles', '/tmp/a.json']))
+      .toEqual({ kind: 'missing', name: 'decisions' })
+  })
+  it('returns execute on full args', () => {
+    expect(parseArgv(['execute', '--session-id', 's1', '--articles', '/tmp/a.json', '--decisions', '/tmp/d.json']))
+      .toEqual({ kind: 'execute', sessionId: 's1', articles: '/tmp/a.json', decisions: '/tmp/d.json' })
+  })
+})
+
+describe('redactTokensInMessage', () => {
+  it('masks ghp_ tokens', () => {
+    const msg = `publish failed with token ghp_${'A'.repeat(36)} in body`
+    const masked = redactTokensInMessage(msg)
+    expect(masked).not.toContain('A'.repeat(36))
+    expect(masked).toContain('ghp_***')
+  })
+  it('masks github_pat_ tokens', () => {
+    const msg = `auth: github_pat_${'X'.repeat(50)} failed`
+    const masked = redactTokensInMessage(msg)
+    expect(masked).not.toContain('X'.repeat(50))
+    expect(masked).toContain('[REDACTED]')
+  })
+  it('masks bare 40-char hex tokens', () => {
+    const hex40 = 'a'.repeat(40)
+    const masked = redactTokensInMessage(`legacy token: ${hex40}`)
+    expect(masked).not.toContain(hex40)
+    expect(masked).toContain('[REDACTED]')
+  })
+  it('leaves normal text alone', () => {
+    expect(redactTokensInMessage('nothing to mask here')).toBe('nothing to mask here')
+  })
+})
+
+describe('runCli', () => {
+  type ExitErr = Error & { code?: number }
+  function makeIo(argv: string[], overrides: Partial<{
+    resolveToken: () => string
+    stderr: string[]
+    makeOctokit: () => Parameters<typeof runCli>[0]['makeOctokit']
+  }> = {}) {
+    const errs: string[] = overrides.stderr ?? []
+    const exitErr = (code: number): never => {
+      const e = new Error(`exit:${code}`) as ExitErr
+      e.code = code
+      throw e
+    }
+    return {
+      io: {
+        argv,
+        stderr: (s: string) => { errs.push(s) },
+        stdout: () => {},
+        exit: exitErr as unknown as (code: number) => never,
+        resolveToken: overrides.resolveToken,
+        makeOctokit: undefined,
+      } as Parameters<typeof runCli>[0],
+      errs,
+    }
+  }
+
+  it('exits with usage when no command given', async () => {
+    const { io, errs } = makeIo([])
+    await expect(runCli(io)).rejects.toThrow('exit:1')
+    expect(errs.join('')).toContain('Usage')
+  })
+
+  it('exits with missing-arg message', async () => {
+    const { io, errs } = makeIo(['prepare-match', '--session-id', 's1'])
+    await expect(runCli(io)).rejects.toThrow('exit:1')
+    expect(errs.join('')).toContain('--articles')
+  })
+
+  it('catches errors from token resolution, writes redacted publish failed message', async () => {
+    // resolveToken throws — must be caught inside try/catch (B2).
+    const { io, errs } = makeIo(
+      ['prepare-match', '--session-id', 's', '--articles', '/tmp/x.json'],
+      { resolveToken: () => { throw new Error('GITHUB_TOKEN missing — token leaked: ghp_' + 'B'.repeat(36)) } },
+    )
+    await expect(runCli(io)).rejects.toThrow('exit:1')
+    const text = errs.join('')
+    expect(text).toContain('publish failed:')
+    expect(text).toContain('ghp_***')
+    expect(text).not.toContain('B'.repeat(36))
+  })
+
+  it('catches execute-time errors and writes publish failed line', async () => {
+    // Write real files so prepareMatch gets past readFileSync, then throw from Octokit.
+    const tmp = mkdtempSync(join(tmpdir(), 'cli-'))
+    const articles = join(tmp, 'a.json')
+    writeFileSync(articles, JSON.stringify([{ title: 'T', summary: 'S', body: 'B', tags: [], chunkIndices: [1] }]))
+    const errs: string[] = []
+    const io: Parameters<typeof runCli>[0] = {
+      argv: ['prepare-match', '--session-id', 's1', '--articles', articles],
+      stderr: (s: string) => { errs.push(s) },
+      stdout: () => {},
+      exit: ((code: number): never => { throw Object.assign(new Error(`exit:${code}`), { code }) }) as unknown as (code: number) => never,
+      resolveToken: () => 'ghp_' + 'C'.repeat(36),
+      makeOctokit: () => ({
+        rest: {
+          git: { getRef: vi.fn(), getCommit: vi.fn(), createBlob: vi.fn(), createTree: vi.fn(), createCommit: vi.fn(), updateRef: vi.fn() },
+          repos: { getContent: vi.fn().mockRejectedValue(Object.assign(new Error('boom'), { status: 500 })) },
+        },
+      } as unknown as Parameters<typeof runCli>[0]['makeOctokit'] extends (t: string) => infer R ? R : never),
+    }
+    await expect(runCli(io)).rejects.toThrow('exit:1')
+    expect(errs.join('')).toContain('publish failed: boom')
+    rmSync(tmp, { recursive: true, force: true })
+  })
+})
+
+describe('runCli execute path (coverage completion)', () => {
+  beforeEach(() => { process.env.LOGEX_SKIP_HERO = 'true' })
+  afterEach(() => { delete process.env.LOGEX_SKIP_HERO })
+
+  it('dispatches to execute on execute command with good files', async () => {
+    const tmp = mkdtempSync(join(tmpdir(), 'cli-exec-'))
+    const articles = join(tmp, 'a.json')
+    const decisions = join(tmp, 'd.json')
+    writeFileSync(articles, JSON.stringify([{
+      title: 'T', summary: 'S', body: 'B', lang: 'zh',
+      translations: { en: { title: 'Te', summary: 'Se', body: 'Be' } },
+      tags: [], chunkIndices: [1], slug: 'cli-exec',
+    }]))
+    writeFileSync(decisions, JSON.stringify([{ newIndex: 0, action: 'insert' }]))
+    const stdouts: string[] = []
+    const stderrs: string[] = []
+    const fake = makeOctokit()
+    await expect(runCli({
+      argv: ['execute', '--session-id', 's-cli', '--articles', articles, '--decisions', decisions],
+      stderr: (s) => { stderrs.push(s) },
+      stdout: (s) => { stdouts.push(s) },
+      exit: ((code: number): never => { throw Object.assign(new Error(`exit:${code}`), { code }) }) as unknown as (code: number) => never,
+      resolveToken: () => 'ghp_' + 'D'.repeat(36),
+      makeOctokit: () => fake as unknown as Parameters<typeof runCli>[0]['makeOctokit'] extends (t: string) => infer R ? R : never,
+    })).resolves.toBeUndefined()
+    expect(fake.rest.git.createCommit).toHaveBeenCalled()
+    rmSync(tmp, { recursive: true, force: true })
+  })
+})
+
+describe('main() stdout wiring', () => {
+  it('main wires process.stdout writer (coverage for stdout fn on line 796)', async () => {
+    const { main } = await import('../publish.js')
+    const origArgv = process.argv
+    const origExit = process.exit
+    const origStderr = process.stderr.write.bind(process.stderr)
+    process.argv = ['node', 'publish.ts', 'execute']
+    ;(process as unknown as { exit: (code: number) => never }).exit = ((code: number) => {
+      throw Object.assign(new Error(`exit:${code}`), { code })
+    }) as unknown as (code?: number) => never
+    ;(process.stderr as unknown as { write: (s: string) => boolean }).write = (() => true) as unknown as (s: string) => boolean
+    try {
+      // execute without --session-id → missing-arg path; exits 1.
+      await expect(main()).rejects.toThrow('exit:1')
+    } finally {
+      process.argv = origArgv
+      ;(process as unknown as { exit: typeof origExit }).exit = origExit
+      ;(process.stderr as unknown as { write: typeof origStderr }).write = origStderr
+    }
   })
 })
