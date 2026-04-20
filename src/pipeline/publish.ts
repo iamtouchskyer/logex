@@ -54,10 +54,9 @@ export class SHAConflictError extends Error {
 }
 
 export class RateLimitedError extends Error {
-  constructor(
-    public readonly resetAt: Date | null,
-    public readonly retryAfterSec: number | null,
-  ) {
+  public readonly resetAt: Date | null
+  public readonly retryAfterSec: number | null
+  constructor(resetAt: Date | null, retryAfterSec: number | null) {
     const when = resetAt
       ? `at ${resetAt.toISOString()}`
       : retryAfterSec != null
@@ -67,16 +66,20 @@ export class RateLimitedError extends Error {
       `GitHub rate limit exceeded — retry ${when}. Not auto-retrying; rerun once the window resets.`,
     )
     this.name = 'RateLimitedError'
+    this.resetAt = resetAt
+    this.retryAfterSec = retryAfterSec
   }
 }
 
 export class InsufficientScopeError extends Error {
-  constructor(public readonly scopes: string) {
+  public readonly scopes: string
+  constructor(scopes: string) {
     super(
       `GitHub token is missing required 'repo' scope (token scopes: '${scopes}'). `
       + 'Regenerate a classic PAT with repo scope at https://github.com/settings/tokens/new',
     )
     this.name = 'InsufficientScopeError'
+    this.scopes = scopes
   }
 }
 

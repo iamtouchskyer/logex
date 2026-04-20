@@ -776,9 +776,10 @@ describe('enumerateLangContent branches via publishRun', () => {
         title: 'T', summary: 'S', body: 'B', lang: 'zh',
         translations: {
           en: { title: 'T-en', summary: 'S-en', body: 'B-en' },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ja: null as any,
-        },
+          // Extra null-valued lang key exercises the null-guard branch in
+          // enumerateLangContent. Not in the Lang union — cast intentionally.
+          ja: null,
+        } as unknown as Record<'zh' | 'en', { title: string; summary: string; body: string }>,
         tags: [], chunkIndices: [1], slug: 'lang-null',
       }],
       decisions: [{ newIndex: 0, action: 'insert' }],

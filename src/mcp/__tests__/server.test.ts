@@ -13,8 +13,7 @@ const originalFetch = globalThis.fetch;
 
 beforeEach(() => {
   fetchMock.mockReset();
-  // @ts-expect-error test override
-  globalThis.fetch = fetchMock;
+  globalThis.fetch = fetchMock as unknown as typeof fetch;
   // Ensure resolveGitHubToken has something to return.
   process.env.GITHUB_TOKEN = "ghp_FAKE_" + "A".repeat(36);
 });
