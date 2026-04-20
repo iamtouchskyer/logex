@@ -110,7 +110,7 @@ describe('Sidebar', () => {
           entries: 1,
           messages: 1,
           chunks: 1,
-          tokens: { total: 2500, input: 1000, output: 1500 },
+          tokens: { total: 2500, input: 1000, output: 1500, cache_creation: 0, cache_read: 0 },
         },
       }),
     ]
@@ -127,7 +127,7 @@ describe('Sidebar', () => {
           entries: 1,
           messages: 1,
           chunks: 1,
-          tokens: { total: 500, input: 200, output: 300 },
+          tokens: { total: 500, input: 200, output: 300, cache_creation: 0, cache_read: 0 },
         },
       }),
     ]
@@ -141,16 +141,16 @@ describe('Sidebar', () => {
         slug: 'a',
         stats: {
           entries: 1, messages: 1, chunks: 1,
-          tokens: { total: 0, input: 0, output: 0 },
-          costEstimate: { total_cost: 1.25 } as unknown as ArticleMeta['stats']['costEstimate'],
+          tokens: { total: 0, input: 0, output: 0, cache_creation: 0, cache_read: 0 },
+          costEstimate: { total_cost: 1.25, currency: 'USD' },
         },
       }),
       article({
         slug: 'b',
         stats: {
           entries: 1, messages: 1, chunks: 1,
-          tokens: { total: 0, input: 0, output: 0 },
-          costEstimate: { total_cost: 0.5 } as unknown as ArticleMeta['stats']['costEstimate'],
+          tokens: { total: 0, input: 0, output: 0, cache_creation: 0, cache_read: 0 },
+          costEstimate: { total_cost: 0.5, currency: 'USD' },
         },
       }),
     ]
