@@ -95,6 +95,7 @@ function asOk(o: FakeOctokit) {
 
 function bilingualArticle(over: {
   title?: string
+  body?: string
   chunkIndices?: number[]
   slug?: string
   lang?: 'zh' | 'en'
@@ -104,9 +105,9 @@ function bilingualArticle(over: {
   return {
     title: over.title ?? 'T',
     summary: 'S',
-    body: 'B',
+    body: over.body ?? 'B',
     lang: over.lang ?? ('zh' as const),
-    translations: { en: { title: (over.title ?? 'T') + '-en', summary: 'S-en', body: 'B-en' } },
+    translations: { en: { title: (over.title ?? 'T') + '-en', summary: 'S-en', body: (over.body ?? 'B') + '-en' } },
     tags: over.tags ?? [],
     chunkIndices: over.chunkIndices ?? [1],
     slug: over.slug,
