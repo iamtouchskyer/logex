@@ -24,7 +24,7 @@ scripts/
 e2e/               # playwright E2E + a11y
 ```
 
-Article data lives in a **separate public repo** `~/Code/logex-data` (not in this repo). Webapp reads it at build/runtime via `VITE_STORAGE=github`.
+Article data lives in the public `iamtouchskyer/logex-data` GitHub repo (not in this repo). logex publishes directly via the GitHub Contents API — ensure `GITHUB_TOKEN` is set in `~/.claude/.env` with `repo` scope. Webapp reads it at build/runtime via `VITE_STORAGE=github`.
 
 ## Dev Workflow
 

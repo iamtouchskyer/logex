@@ -148,7 +148,7 @@ If primary is `en`, flip: `lang: "en"`, top-level fields in English, `translatio
 
 ### 7. Publish articles to logex-data repo (via publish.ts)
 
-**Data repo**: `/Users/touchskyer/Code/logex-data` (clone if missing: `git clone https://github.com/iamtouchskyer/logex-data ~/Code/logex-data`)
+**Data repo**: `iamtouchskyer/logex-data` on GitHub. logex publishes directly via the Contents API — no local clone, no shell git. Ensure `GITHUB_TOKEN` is set in `~/.claude/.env` with `repo` scope (https://github.com/settings/tokens/new).
 
 **IMPORTANT — temp file path**: Use a **session-suffixed** path to avoid collisions with a parallel `/logex` running in another terminal/session on the same machine. Two sessions sharing `/tmp/logex-articles.json` will silently overwrite each other's articles.
 
@@ -164,7 +164,6 @@ Save all articles from step 6 as a JSON array to `$ARTICLES_JSON`. Each article 
 ```bash
 cd /Users/touchskyer/Code/logex-projects/logex
 npx tsx src/pipeline/publish.ts prepare-match \
-  --data-dir /Users/touchskyer/Code/logex-data \
   --session-id "<SESSION_ID>" \
   --articles "$ARTICLES_JSON"
 ```
@@ -185,44 +184,20 @@ Save to `$DECISIONS_JSON`.
 ```bash
 cd /Users/touchskyer/Code/logex-projects/logex
 npx tsx src/pipeline/publish.ts execute \
-  --data-dir /Users/touchskyer/Code/logex-data \
   --session-id "<SESSION_ID>" \
   --articles "$ARTICLES_JSON" \
   --decisions "$DECISIONS_JSON"
 ```
 
-This writes one file per `(slug, lang)` pair — for a bilingual article that's two files: `YYYY/MM/DD/<slug>.zh.json` and `YYYY/MM/DD/<slug>.en.json`. Updates `index.json`. Preserves existing slugs/URLs on updates. Re-running `/logex` on the same session is safe — it upserts, not appends.
+publish.ts makes ONE atomic commit to `iamtouchskyer/logex-data` containing every `(slug, lang)` JSON plus the updated `index.json` plus any hero image. Updates preserve existing slugs/URLs; re-running `/logex` on the same session is safe — it upserts, not appends.
 
-### 8. Commit articles IMMEDIATELY (before anything slow)
+### 8. (no manual git commit step — publish.ts already committed)
 
-**Don't skip this.** The files written by publish.ts are untracked until committed. Any parallel process on the same repo (another `/logex` session, a `git reset --hard` during test runs, a janitor script) will silently wipe them. Hero image generation in the next step can take 30-60 seconds — that's a large window for disaster.
-
-```bash
-cd /Users/touchskyer/Code/logex-data
-git add .
-git commit -m "articles: {count} from session {SESSION_ID}"
-git push
-```
-
-Only AFTER the push succeeds, proceed to hero images. If the push fails (non-fast-forward), pull-rebase and retry — do not move on with untracked content.
+Previously this step ran `git add && git commit && git push` against a local clone. That is gone. publish.ts's single Contents API commit IS the publish — once `execute` returns, the articles are live on GitHub. Skip to step 9.
 
 ### 9. Generate hero image (for each article)
 
-Use the `image-x` skill to generate a hero image for each article:
-```
-/image-x Generate a minimalist, dark-themed abstract illustration for a technical blog post titled "{primary-title}". Style: geometric shapes, gradient, developer aesthetic. No text in image. 1200x630.
-```
-
-Save to `/Users/touchskyer/Code/logex-data/images/{slug}.png`. Same image serves both language versions. The slug is available from step 7c's output.
-
-When all images are generated, commit+push them:
-
-```bash
-cd /Users/touchskyer/Code/logex-data
-git add images/
-git commit -m "images: hero for session {SESSION_ID}"
-git push
-```
+publish.ts can embed a base64 hero image by passing `heroImageBase64` on the article, or auto-generates one via the `image-x` skill when `LOGEX_SKIP_HERO` is unset. If you want to supply your own, base64-encode a 1200x630 PNG and set the field before calling `execute`. Otherwise let the pipeline handle it — the image lands at `images/{slug}.png` in the same atomic commit as the article JSONs.
 
 ### 10. Report & deploy
 

@@ -75,7 +75,7 @@ Client-side config:
 | Codex | `npm install -g @touchskyer/logex && codex mcp add logex -- logex mcp` |
 | Windsurf / others | Same pattern — command `logex`, args `["mcp"]` |
 
-Articles are stored in the `logex-data` repo (`~/Code/logex-data` by default), so output is portable across clients.
+Articles are stored in the `iamtouchskyer/logex-data` repo on GitHub — logex publishes directly via the Contents API. Ensure `GITHUB_TOKEN` is set in `~/.claude/.env` with `repo` scope.
 
 ### License
 
@@ -152,7 +152,7 @@ logex mcp
 | Codex | `npm install -g @touchskyer/logex && codex mcp add logex -- logex mcp` |
 | Windsurf / 其它 | 同样的 pattern：command `logex`，args `["mcp"]` |
 
-文章保存在 `logex-data` 仓库（默认 `~/Code/logex-data`），跨 client 可移植。
+文章保存在 `iamtouchskyer/logex-data` 仓库（直接通过 GitHub Contents API 发布；在 `~/.claude/.env` 中配好带 `repo` scope 的 `GITHUB_TOKEN`）。
 
 ### License
 
