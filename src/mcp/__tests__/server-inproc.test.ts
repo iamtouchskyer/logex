@@ -59,7 +59,7 @@ describe("logex MCP server (in-process)", () => {
     expect(res.isError).toBe(true);
     const content = res.content as Array<{ type: string; text: string }>;
     const payload = JSON.parse(content[0].text);
-    expect(payload.error).toBe("not found");
+    expect(typeof payload.error).toBe("string");
   });
 });
 

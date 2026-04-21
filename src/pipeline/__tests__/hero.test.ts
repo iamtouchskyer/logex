@@ -29,10 +29,15 @@ describe('detectImageX', () => {
     expect(ok).toBe(false)
     expect(accessMock).toHaveBeenCalledOnce()
   })
-  it('returns true when fs.access resolves', async () => {
+  it('returns true when fs.access resolves and DASHSCOPE_API_KEY is set', async () => {
+    const accessMock = vi.fn().mockResolvedValue(undefined)
+    const ok = await detectImageX({ DASHSCOPE_API_KEY: 'test-key' } as unknown as NodeJS.ProcessEnv, accessMock)
+    expect(ok).toBe(true)
+  })
+  it('returns false when fs.access resolves but no DASHSCOPE_API_KEY', async () => {
     const accessMock = vi.fn().mockResolvedValue(undefined)
     const ok = await detectImageX({} as NodeJS.ProcessEnv, accessMock)
-    expect(ok).toBe(true)
+    expect(ok).toBe(false)
   })
 })
 
