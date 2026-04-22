@@ -1,6 +1,6 @@
 {
   "name": "@touchskyer/logex",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "type": "module",
   "description": "Write blog-style session papers from a Claude Code session JSONL",
   "license": "MIT",
