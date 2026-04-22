@@ -559,7 +559,7 @@ ${newDesc}
     existingCount: existing.length,
     newCount: remainingIdxs.length,
     dedupByHash: hashDecisions.length,
-    newCount: newArticles.length,
+    totalNewArticles: newArticles.length,
   }) + '\n')
 }
 
