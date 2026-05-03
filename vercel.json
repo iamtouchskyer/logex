@@ -1,6 +1,7 @@
 {
   "rewrites": [
-    { "source": "/images/:path*", "destination": "/api/images" },
+    { "source": "/images/:path*", "destination": "/api/images/:path*" },
+    { "source": "/api/images/:path*", "destination": "/api/images/[...path]" },
     { "source": "/api/articles/:path*", "destination": "/api/articles/[...path]" },
     { "source": "/((?!api/|@|src/|node_modules/|assets/|favicon|vite\\.svg).*)", "destination": "/index.html" }
   ]
