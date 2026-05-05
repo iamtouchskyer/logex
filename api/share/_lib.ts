@@ -4,7 +4,7 @@
  */
 import crypto from 'crypto'
 import bcrypt from 'bcryptjs'
-import { verifySession } from '../_session.js'
+import { verifySession, signSession } from '../_session.js'
 
 export interface ShareRecord {
   id: string
@@ -133,6 +133,9 @@ export interface AuthPayload {
   name?: string | null
   avatar?: string | null
   access_token?: string
+  refresh_token?: string
+  /** Unix epoch (seconds) when the GitHub access_token expires. */
+  token_expires_at?: number
   exp?: number
 }
 
@@ -164,6 +167,8 @@ export function getAuthUserFull(cookieHeader: string | undefined): AuthPayload |
     name: typeof payload.name === 'string' ? payload.name : null,
     avatar: typeof payload.avatar === 'string' ? payload.avatar : null,
     access_token: typeof payload.access_token === 'string' ? payload.access_token : undefined,
+    refresh_token: typeof payload.refresh_token === 'string' ? payload.refresh_token : undefined,
+    token_expires_at: typeof payload.token_expires_at === 'number' ? payload.token_expires_at : undefined,
     exp: typeof payload.exp === 'number' ? payload.exp : undefined,
   }
 }
@@ -179,3 +184,82 @@ export function indexKey(userId: string): string {
 }
 
 export const MAX_SHARES_PER_USER = 50
+
+// ---------- token refresh ----------
+
+/**
+ * Like `getAuthUserFull`, but transparently refreshes an expired GitHub
+ * access_token using the stored refresh_token. On success the new tokens are
+ * re-signed into the session cookie via `res`.
+ *
+ * Legacy sessions (no refresh_token) pass through as-is — the downstream call
+ * will 401 and the user must re-login.
+ */
+export async function getAuthWithRefresh(
+  cookieHeader: string | undefined,
+  res: { setHeader(name: string, value: string | string[]): void },
+): Promise<AuthPayload | null> {
+  const session = getAuthUserFull(cookieHeader)
+  if (!session) return null
+
+  // No expiry tracking → legacy session, let downstream handle
+  if (!session.token_expires_at || !session.refresh_token) return session
+
+  const now = Math.floor(Date.now() / 1000)
+  // Still fresh (with 5-minute buffer)
+  if (session.token_expires_at > now + 300) return session
+
+  // Token expired — refresh
+  const refreshed = await refreshGitHubToken(session.refresh_token)
+  if (!refreshed) return null // refresh failed → force re-login
+
+  session.access_token = refreshed.access_token
+  session.refresh_token = refreshed.refresh_token
+  session.token_expires_at = now + refreshed.expires_in
+
+  // Re-sign session with updated tokens, preserve original exp
+  const token = signSession({
+    login: session.login,
+    name: session.name ?? undefined,
+    avatar: session.avatar ?? undefined,
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+    token_expires_at: session.token_expires_at,
+    exp: session.exp,
+  })
+
+  const secure = process.env.VERCEL_URL ? ' Secure;' : ''
+  res.setHeader('Set-Cookie', [
+    `session=${token}; Path=/; HttpOnly; SameSite=Lax;${secure} Max-Age=${7 * 24 * 3600}`,
+  ])
+
+  return session
+}
+
+async function refreshGitHubToken(refreshToken: string): Promise<{
+  access_token: string
+  refresh_token: string
+  expires_in: number
+} | null> {
+  try {
+    const resp = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        client_id: process.env.GITHUB_CLIENT_ID,
+        client_secret: process.env.GITHUB_CLIENT_SECRET,
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      }),
+    })
+    const data = (await resp.json()) as Record<string, unknown>
+    if (typeof data.access_token !== 'string') return null
+    return {
+      access_token: data.access_token,
+      refresh_token: typeof data.refresh_token === 'string' ? data.refresh_token : refreshToken,
+      expires_in: typeof data.expires_in === 'number' ? data.expires_in : 28800,
+    }
+  } catch {
+    return null
+  }
+}

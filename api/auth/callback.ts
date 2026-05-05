@@ -34,7 +34,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }),
   })
 
-  const tokenData = await tokenRes.json() as { access_token?: string; error?: string }
+  const tokenData = await tokenRes.json() as {
+    access_token?: string
+    refresh_token?: string
+    expires_in?: number
+    error?: string
+  }
   if (!tokenData.access_token) {
     return res.status(401).json({ error: tokenData.error || 'Failed to get access token' })
   }
@@ -59,6 +64,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       name: user.name,
       avatar: user.avatar_url,
       access_token: tokenData.access_token,
+      refresh_token: tokenData.refresh_token,
+      token_expires_at: tokenData.expires_in
+        ? Math.floor(Date.now() / 1000) + tokenData.expires_in
+        : undefined,
       exp: Math.floor(Date.now() / 1000) + 7 * 24 * 3600, // 7 days
     })
   } catch (e) {

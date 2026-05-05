@@ -38,6 +38,9 @@ export interface SessionPayload {
   name?: string | null
   avatar?: string | null
   access_token?: string
+  refresh_token?: string
+  /** Unix epoch (seconds) when the GitHub access_token expires. */
+  token_expires_at?: number
   exp?: number
   [key: string]: unknown
 }

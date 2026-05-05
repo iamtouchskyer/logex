@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getAuthUserFull } from '../share/_lib.js'
+import { getAuthWithRefresh } from '../share/_lib.js'
 import { fetchFromUserRepo, isSafeArticlePath } from './_lib.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
@@ -8,7 +8,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return
   }
 
-  const session = getAuthUserFull(req.headers.cookie)
+  const session = await getAuthWithRefresh(req.headers.cookie, res)
   if (!session || !session.access_token) {
     res.status(401).json({ error: 'Unauthorized' })
     return
