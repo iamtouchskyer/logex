@@ -114,7 +114,7 @@ function buildZhArticlePrompt(transcript: string, metaBlock: string): string {
 {
   "title": "一句话标题，要有hook感",
   "summary": "2-3 句话，像 blog 的 description meta tag，让人想点进来",
-  "body": "完整的 markdown 文章（1500-3000 字）",
+  "body": "完整的 markdown 文章（5000-9000 个非空白字符；低于 5000 会被 publish gate 拒绝）",
   "tags": ["tag1", "tag2", ...],
   "project": "primary-project-name"
 }
@@ -182,7 +182,7 @@ From the session transcript below, write one technical blog post.
 {
   "title": "One-line title with a hook",
   "summary": "2-3 sentences, reads like a blog meta description that makes you want to click",
-  "body": "Full markdown article (1500-3000 words)",
+  "body": "Full markdown article (1500-3000 words; below 1500 is rejected by the publish gate)",
   "tags": ["tag1", "tag2", ...],
   "project": "primary-project-name"
 }

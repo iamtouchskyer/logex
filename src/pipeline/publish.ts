@@ -35,6 +35,8 @@ export const DATA_REPO_NAME = 'logex-data'
 export const DATA_REPO_BRANCH = 'main'
 export const MAX_BLOB_BYTES = 90 * 1024 * 1024
 export const MAX_REF_RETRIES = 3
+export const MIN_EN_BODY_WORDS = 1500
+export const MIN_ZH_BODY_CHARS = 5000
 
 // ─── Errors ──────────────────────────────────────────────────────────
 
@@ -92,6 +94,16 @@ export class BilingualRequiredError extends Error {
       + `Bilingual is mandatory for zh-primary articles — never emit monolingual.`,
     )
     this.name = 'BilingualRequiredError'
+  }
+}
+
+export class ArticleTooShortError extends Error {
+  constructor(articleIndex: number, title: string, lang: Lang, actual: number, min: number, unit: string) {
+    super(
+      `Article [${articleIndex}] "${title}" ${lang} body is too short: `
+      + `${actual} ${unit}, minimum is ${min}. Revise before publish.`,
+    )
+    this.name = 'ArticleTooShortError'
   }
 }
 
@@ -444,6 +456,34 @@ function enumerateLangContent(article: NewArticle): Array<{ lang: Lang; content:
   return out
 }
 
+export function countEnglishWords(text: string): number {
+  return text.match(/[A-Za-z0-9]+(?:['-][A-Za-z0-9]+)*/g)?.length ?? 0
+}
+
+export function countChineseBodyChars(text: string): number {
+  return text.replace(/\s+/g, '').length
+}
+
+export function assertArticleLength(article: NewArticle, idx: number): void {
+  for (const { lang, content } of enumerateLangContent(article)) {
+    if (lang === 'en') {
+      const words = countEnglishWords(content.body)
+      if (words < MIN_EN_BODY_WORDS) {
+        throw new ArticleTooShortError(idx, content.title, lang, words, MIN_EN_BODY_WORDS, 'words')
+      }
+    } else if (lang === 'zh') {
+      const chars = countChineseBodyChars(content.body)
+      if (chars < MIN_ZH_BODY_CHARS) {
+        throw new ArticleTooShortError(idx, content.title, lang, chars, MIN_ZH_BODY_CHARS, 'non-space chars')
+      }
+    }
+  }
+}
+
+export function assertArticleLengths(articles: NewArticle[]): void {
+  articles.forEach((article, idx) => assertArticleLength(article, idx))
+}
+
 // ─── prepare-match ───────────────────────────────────────────────────
 
 export async function prepareMatch(
@@ -451,8 +491,10 @@ export async function prepareMatch(
   sessionId: string,
   articlesPath: string,
 ): Promise<void> {
-  const index = await fetchIndex(octokit)
   const newArticles: NewArticle[] = JSON.parse(readFileSync(articlesPath, 'utf-8'))
+  newArticles.forEach((a, i) => assertBilingual(a, i))
+  assertArticleLengths(newArticles)
+  const index = await fetchIndex(octokit)
 
   // Pre-pass: content-hash dedup across ALL existing articles (any session).
   // If the hash matches an existing slug, auto-pin this article as an update
@@ -681,6 +723,7 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
 
   // Fail fast: enforce bilingual invariant BEFORE committing anything.
   newArticles.forEach((a, i) => assertBilingual(a, i))
+  assertArticleLengths(newArticles)
 
   // Fail fast: enforce content-hash dedup invariant.
   // If a new article's content hash matches an existing entry but the

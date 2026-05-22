@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 vi.mock('../hero.js', () => ({
-  generateHeroImage: vi.fn(async (_slug: string, _title: string) => ({
+  generateHeroImage: vi.fn(async () => ({
     mime: 'image/png',
     data: Buffer.from('PNG-MOCK'),
   })),
@@ -14,7 +14,9 @@ import {
   commitBatch,
   assertBlobSize,
   assertBilingual,
+  assertArticleLength,
   BilingualRequiredError,
+  ArticleTooShortError,
   DuplicateContentError,
   computeContentHash,
   articleContentHash,
@@ -24,6 +26,8 @@ import {
   RateLimitedError,
   InsufficientScopeError,
   MAX_BLOB_BYTES,
+  MIN_EN_BODY_WORDS,
+  MIN_ZH_BODY_CHARS,
   fetchIndex,
   execute,
   prepareMatch,
@@ -39,6 +43,9 @@ beforeEach(() => { process.env.LOGEX_SKIP_HERO = 'true' })
 afterEach(() => { delete process.env.LOGEX_SKIP_HERO })
 
 type MockFn = ReturnType<typeof vi.fn>
+
+const LONG_EN_BODY = Array.from({ length: MIN_EN_BODY_WORDS + 10 }, (_, i) => `word${i}`).join(' ')
+const LONG_ZH_BODY = '内容'.repeat(Math.ceil(MIN_ZH_BODY_CHARS / 2) + 10)
 
 interface FakeOctokit {
   rest: {
@@ -96,6 +103,7 @@ function asOk(o: FakeOctokit) {
 function bilingualArticle(over: {
   title?: string
   body?: string
+  enBody?: string
   chunkIndices?: number[]
   slug?: string
   lang?: 'zh' | 'en'
@@ -105,15 +113,31 @@ function bilingualArticle(over: {
   return {
     title: over.title ?? 'T',
     summary: 'S',
-    body: over.body ?? 'B',
+    body: over.body ?? LONG_ZH_BODY,
     lang: over.lang ?? ('zh' as const),
-    translations: { en: { title: (over.title ?? 'T') + '-en', summary: 'S-en', body: (over.body ?? 'B') + '-en' } },
+    translations: { en: { title: (over.title ?? 'T') + '-en', summary: 'S-en', body: over.enBody ?? LONG_EN_BODY } },
     tags: over.tags ?? [],
     chunkIndices: over.chunkIndices ?? [1],
     slug: over.slug,
     heroImageBase64: over.heroImageBase64,
   }
 }
+
+describe('assertArticleLength / ArticleTooShortError', () => {
+  it('passes when zh and en bodies meet the hard publish floor', () => {
+    expect(() => assertArticleLength(bilingualArticle(), 0)).not.toThrow()
+  })
+
+  it('rejects English bodies below 1500 words', () => {
+    expect(() => assertArticleLength(bilingualArticle({ enBody: 'too short' }), 1))
+      .toThrow(ArticleTooShortError)
+  })
+
+  it('rejects Chinese bodies below the equivalent depth floor', () => {
+    expect(() => assertArticleLength(bilingualArticle({ body: '太短' }), 2))
+      .toThrow(ArticleTooShortError)
+  })
+})
 
 describe('assertBlobSize / BlobTooLargeError', () => {
   it('accepts normal-sized utf-8 content', () => {
@@ -212,7 +236,7 @@ describe('content hash / DuplicateContentError', () => {
   it('publishRun throws DuplicateContentError when inserting an article with existing content hash', async () => {
     const ok = makeOctokit()
     const dupTitle = 'Dup Title'
-    const dupBody = 'Dup Body content'
+    const dupBody = LONG_ZH_BODY
     const existingSlug = '2026-01-01-existing'
     const existingHash = computeContentHash(dupTitle, dupBody)
     await expect(publishRun({
@@ -233,7 +257,7 @@ describe('content hash / DuplicateContentError', () => {
   it('publishRun allows update pointing at the correct matching slug', async () => {
     const ok = makeOctokit()
     const title = 'Same Title'
-    const body = 'Same Body'
+    const body = LONG_ZH_BODY
     const slug = '2026-01-01-existing'
     const hash = computeContentHash(title, body)
     const res = await publishRun({
@@ -255,7 +279,7 @@ describe('content hash / DuplicateContentError', () => {
   it('publishRun throws when update points at a different slug than the content match', async () => {
     const ok = makeOctokit()
     const title = 'X'
-    const body = 'Y'
+    const body = LONG_ZH_BODY
     const hash = computeContentHash(title, body)
     await expect(publishRun({
       octokit: asOk(ok),
@@ -274,11 +298,12 @@ describe('content hash / DuplicateContentError', () => {
 
   it('mergeIndex stamps contentHash on every new entry', async () => {
     const ok = makeOctokit()
+    const body = LONG_ZH_BODY
     const res = await publishRun({
       octokit: asOk(ok),
       sessionId: 's',
       index: { articles: [], lastUpdated: '' },
-      newArticles: [bilingualArticle({ title: 'Fresh Title', body: 'Fresh Body' })],
+      newArticles: [bilingualArticle({ title: 'Fresh Title', body })],
       decisions: [{ newIndex: 0, action: 'insert' }],
     })
     expect(res.results).toHaveLength(1)
@@ -290,7 +315,7 @@ describe('content hash / DuplicateContentError', () => {
     )
     expect(indexBlob).toBeDefined()
     const parsed = JSON.parse((indexBlob![0] as { content: string }).content)
-    expect(parsed.articles[0].contentHash).toBe(computeContentHash('Fresh Title', 'Fresh Body'))
+    expect(parsed.articles[0].contentHash).toBe(computeContentHash('Fresh Title', body))
   })
 })
 
@@ -753,9 +778,7 @@ describe('prepareMatch', () => {
   it('returns needsLlm=false + insert decisions when no existing session articles', async () => {
     const ok = makeOctokit()
     const articlesPath = join(tmp, 'articles.json')
-    writeFileSync(articlesPath, JSON.stringify([
-      { title: 'a', summary: 's', body: 'b', tags: [], chunkIndices: [1] },
-    ]))
+    writeFileSync(articlesPath, JSON.stringify([bilingualArticle({ title: 'a', chunkIndices: [1] })]))
     const spy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
     await prepareMatch(asOk(ok), 'session-new', articlesPath)
     const out = JSON.parse((spy.mock.calls[0][0] as string).trim())
@@ -776,9 +799,7 @@ describe('prepareMatch', () => {
       }),
     })
     const articlesPath = join(tmp, 'articles.json')
-    writeFileSync(articlesPath, JSON.stringify([
-      { title: 'new-title', summary: 's', body: 'b', tags: [], chunkIndices: [1, 3] },
-    ]))
+    writeFileSync(articlesPath, JSON.stringify([bilingualArticle({ title: 'new-title', chunkIndices: [1, 3] })]))
     const spy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
     await prepareMatch(asOk(ok), 's1', articlesPath)
     const out = JSON.parse((spy.mock.calls[0][0] as string).trim())
@@ -803,9 +824,7 @@ describe('prepareMatch', () => {
       }),
     })
     const articlesPath = join(tmp, 'articles.json')
-    writeFileSync(articlesPath, JSON.stringify([
-      { title: 'new', summary: 's', body: 'b', tags: [], chunkIndices: [1] },
-    ]))
+    writeFileSync(articlesPath, JSON.stringify([bilingualArticle({ title: 'new', chunkIndices: [1] })]))
     const spy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
     await prepareMatch(asOk(ok), 's1', articlesPath)
     const out = JSON.parse((spy.mock.calls[0][0] as string).trim())
@@ -963,10 +982,10 @@ describe('enumerateLangContent branches via publishRun', () => {
       octokit: asOk(ok), sessionId,
       index: { articles: [], lastUpdated: '' },
       newArticles: [{
-        title: 'T', summary: 'S', body: 'B', lang: 'zh',
+        title: 'T', summary: 'S', body: LONG_ZH_BODY, lang: 'zh',
         translations: {
-          zh: { title: 'DUP', summary: 'D', body: 'D' },
-          en: { title: 'T-en', summary: 'S-en', body: 'B-en' },
+          zh: { title: 'DUP', summary: 'D', body: LONG_ZH_BODY },
+          en: { title: 'T-en', summary: 'S-en', body: LONG_EN_BODY },
         },
         tags: [], chunkIndices: [1], slug: 'lang-primary',
       }],
@@ -982,9 +1001,9 @@ describe('enumerateLangContent branches via publishRun', () => {
       octokit: asOk(ok), sessionId,
       index: { articles: [], lastUpdated: '' },
       newArticles: [{
-        title: 'T', summary: 'S', body: 'B', lang: 'zh',
+        title: 'T', summary: 'S', body: LONG_ZH_BODY, lang: 'zh',
         translations: {
-          en: { title: 'T-en', summary: 'S-en', body: 'B-en' },
+          en: { title: 'T-en', summary: 'S-en', body: LONG_EN_BODY },
           // Extra null-valued lang key exercises the null-guard branch in
           // enumerateLangContent. Not in the Lang union — cast intentionally.
           ja: null,
@@ -1127,7 +1146,7 @@ describe('runCli', () => {
     // Write real files so prepareMatch gets past readFileSync, then throw from Octokit.
     const tmp = mkdtempSync(join(tmpdir(), 'cli-'))
     const articles = join(tmp, 'a.json')
-    writeFileSync(articles, JSON.stringify([{ title: 'T', summary: 'S', body: 'B', tags: [], chunkIndices: [1] }]))
+    writeFileSync(articles, JSON.stringify([bilingualArticle({ title: 'T', chunkIndices: [1] })]))
     const errs: string[] = []
     const io: Parameters<typeof runCli>[0] = {
       argv: ['prepare-match', '--session-id', 's1', '--articles', articles],
@@ -1157,8 +1176,8 @@ describe('runCli execute path (coverage completion)', () => {
     const articles = join(tmp, 'a.json')
     const decisions = join(tmp, 'd.json')
     writeFileSync(articles, JSON.stringify([{
-      title: 'T', summary: 'S', body: 'B', lang: 'zh',
-      translations: { en: { title: 'Te', summary: 'Se', body: 'Be' } },
+      title: 'T', summary: 'S', body: LONG_ZH_BODY, lang: 'zh',
+      translations: { en: { title: 'Te', summary: 'Se', body: LONG_EN_BODY } },
       tags: [], chunkIndices: [1], slug: 'cli-exec',
     }]))
     writeFileSync(decisions, JSON.stringify([{ newIndex: 0, action: 'insert' }]))
