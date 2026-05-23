@@ -40,7 +40,7 @@ test('authenticated user sees nav username', async ({ page }) => {
       body: JSON.stringify({ user: { login: 'testuser', name: 'Test User', avatar: null } }),
     })
   )
-  await page.route('https://raw.githubusercontent.com/iamtouchskyer/logex-data/main/index.json', (route) =>
+  await page.route('**/api/articles/index', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',

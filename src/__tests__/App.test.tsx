@@ -11,7 +11,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, waitFor, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from '../App'
-import { isAllowedAvatarUrl } from '../App'
+import { isAllowedAvatarUrl } from '../lib/avatar'
 import { clearMemCache, getUserScope } from '../lib/storage/GitHubAdapter'
 
 // ---- jsdom polyfills ----------------------------------------------------

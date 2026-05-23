@@ -39,10 +39,10 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/auth/me', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_USER) })
   )
-  await page.route('https://raw.githubusercontent.com/iamtouchskyer/logex-data/main/index.json', (route) =>
+  await page.route('**/api/articles/index', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_INDEX) })
   )
-  await page.route('https://raw.githubusercontent.com/iamtouchskyer/logex-data/main/2026/04/15/2026-04-15-test-article.json', (route) =>
+  await page.route('**/api/articles/2026/04/15/2026-04-15-test-article.json', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_ARTICLE) })
   )
 })
@@ -59,7 +59,7 @@ test('clicking card opens article reader', async ({ page }) => {
   await card.click()
 
   // URL should have article slug in hash
-  await expect(page).toHaveURL(/#\/articles\/2026-04-15-test-article/)
+  await expect(page).toHaveURL(/#\/(en|zh)\/articles\/2026-04-15-test-article/)
 
   // Reader h1 should appear within 2s
   await expect(page.locator('.reader__title')).toBeVisible({ timeout: 2000 })

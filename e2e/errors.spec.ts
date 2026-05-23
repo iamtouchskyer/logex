@@ -12,15 +12,15 @@ test.beforeEach(async ({ page }) => {
 })
 
 test('index fetch failure shows error state', async ({ page }) => {
-  await page.route('https://raw.githubusercontent.com/iamtouchskyer/logex-data/main/index.json', (route) =>
+  await page.route('**/api/articles/index', (route) =>
     route.fulfill({ status: 500, body: 'Internal Server Error' })
   )
 
   await page.goto('/')
   await page.waitForLoadState('networkidle')
 
-  // Error state should show
-  await expect(page.locator('.state-message--error')).toBeVisible({ timeout: 10000 })
+  // Index failure is surfaced in the onboarding error alert.
+  await expect(page.getByRole('alert')).toContainText('Fetch failed', { timeout: 10000 })
 })
 
 test('article not found shows error state in reader', async ({ page }) => {
@@ -40,11 +40,11 @@ test('article not found shows error state in reader', async ({ page }) => {
     ],
     lastUpdated: '2026-04-15',
   }
-  await page.route('https://raw.githubusercontent.com/iamtouchskyer/logex-data/main/index.json', (route) =>
+  await page.route('**/api/articles/index', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_INDEX) })
   )
   // Make the article fetch fail
-  await page.route('https://raw.githubusercontent.com/iamtouchskyer/logex-data/main/2026/04/15/2026-04-15-test-article.json', (route) =>
+  await page.route('**/api/articles/2026/04/15/2026-04-15-test-article.json', (route) =>
     route.fulfill({ status: 404, body: 'Not Found' })
   )
 
@@ -73,10 +73,10 @@ test('article reader error back button navigates to articles list', async ({ pag
     ],
     lastUpdated: '2026-04-15',
   }
-  await page.route('https://raw.githubusercontent.com/iamtouchskyer/logex-data/main/index.json', (route) =>
+  await page.route('**/api/articles/index', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_INDEX) })
   )
-  await page.route('https://raw.githubusercontent.com/iamtouchskyer/logex-data/main/2026/04/15/2026-04-15-test-article.json', (route) =>
+  await page.route('**/api/articles/2026/04/15/2026-04-15-test-article.json', (route) =>
     route.fulfill({ status: 404, body: 'Not Found' })
   )
 

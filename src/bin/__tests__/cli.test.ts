@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
@@ -8,9 +8,7 @@ const CLI = join(process.cwd(), "dist", "bin", "logex.js");
 describe("logex CLI", () => {
   beforeAll(() => {
     if (!existsSync(CLI)) {
-      throw new Error(
-        `dist CLI missing at ${CLI}. Run \`npm run build:cli\` first.`,
-      );
+      execFileSync("npm", ["run", "build:cli"], { stdio: "pipe" });
     }
   });
 

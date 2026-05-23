@@ -87,16 +87,16 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/auth/me', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_USER) })
   )
-  await page.route('https://raw.githubusercontent.com/iamtouchskyer/logex-data/main/index.json', (route) =>
+  await page.route('**/api/articles/index', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_INDEX_TIMELINE) })
   )
-  await page.route('https://raw.githubusercontent.com/iamtouchskyer/logex-data/main/2026/04/15/2026-04-15-article-one.json', (route) =>
+  await page.route('**/api/articles/2026/04/15/2026-04-15-article-one.json', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_ARTICLE_ONE) })
   )
-  await page.route('https://raw.githubusercontent.com/iamtouchskyer/logex-data/main/2026/04/15/2026-04-15-article-two.json', (route) =>
+  await page.route('**/api/articles/2026/04/15/2026-04-15-article-two.json', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_ARTICLE_TWO) })
   )
-  await page.route('https://raw.githubusercontent.com/iamtouchskyer/logex-data/main/2026/04/14/2026-04-14-article-three.json', (route) =>
+  await page.route('**/api/articles/2026/04/14/2026-04-14-article-three.json', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_ARTICLE_THREE) })
   )
 })
@@ -132,7 +132,7 @@ test('timeline entry click opens article reader', async ({ page }) => {
   await page.locator('.timeline__entry').first().click()
 
   // Should navigate to reader
-  await expect(page).toHaveURL(/#\/articles\//)
+  await expect(page).toHaveURL(/#\/(en|zh)\/articles\//)
   await expect(page.locator('.reader__title')).toBeVisible({ timeout: 5000 })
 })
 
@@ -143,5 +143,5 @@ test('nav active link changes on timeline route', async ({ page }) => {
   await expect(page.locator('.timeline')).toBeVisible({ timeout: 10000 })
 
   // Timeline nav link should be active
-  await expect(page.locator('a.nav__link--active')).toContainText('Timeline')
+  await expect(page.locator('.sidebar-wrapper--desktop a.sidebar__link--active')).toContainText('Timeline')
 })

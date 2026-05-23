@@ -121,13 +121,17 @@ export async function detectImageX(
   } catch {
     return false
   }
-  if (await resolveDashscopeKey(env)) return true
+  if (await resolveDashscopeKey(env, env === process.env)) return true
   return false
 }
 
 /** Look up DASHSCOPE_API_KEY in env, falling back to ~/.claude/.env. */
-async function resolveDashscopeKey(env: NodeJS.ProcessEnv = process.env): Promise<string | null> {
+async function resolveDashscopeKey(
+  env: NodeJS.ProcessEnv = process.env,
+  fallbackToDotEnv = true,
+): Promise<string | null> {
   if (env.DASHSCOPE_API_KEY) return env.DASHSCOPE_API_KEY
+  if (!fallbackToDotEnv) return null
   try {
     const envPath = join(homedir(), '.claude', '.env')
     const raw = await readFile(envPath, 'utf-8')
@@ -159,7 +163,7 @@ export async function generateWithImageX(
   } = {},
 ): Promise<HeroImage> {
   const env = opts.env ?? process.env
-  const key = await resolveDashscopeKey(env)
+  const key = await resolveDashscopeKey(env, opts.env == null)
   if (!key) throw new Error('DASHSCOPE_API_KEY not set')
 
   const scriptPath = opts.scriptPath

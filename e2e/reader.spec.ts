@@ -14,6 +14,11 @@ const MOCK_INDEX_RICH = {
       date: '2026-04-15',
       tags: ['opc', 'testing', 'playwright'],
       project: 'opc',
+      duration: '4h 27min',
+      stats: {
+        tokens: { total: 54000, input: 30000, output: 24000 },
+        costEstimate: { total_cost: 1.23 },
+      },
       heroImage: null,
       path: '2026/04/15/2026-04-15-rich-stats-article.json',
     },
@@ -71,13 +76,13 @@ test.beforeEach(async ({ page }) => {
   await page.route('**/api/auth/me', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_USER) })
   )
-  await page.route('https://raw.githubusercontent.com/iamtouchskyer/logex-data/main/index.json', (route) =>
+  await page.route('**/api/articles/index', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_INDEX_RICH) })
   )
-  await page.route('https://raw.githubusercontent.com/iamtouchskyer/logex-data/main/2026/04/15/2026-04-15-rich-stats-article.json', (route) =>
+  await page.route('**/api/articles/2026/04/15/2026-04-15-rich-stats-article.json', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_ARTICLE_RICH) })
   )
-  await page.route('https://raw.githubusercontent.com/iamtouchskyer/logex-data/main/2026/04/14/2026-04-14-broken-image-article.json', (route) =>
+  await page.route('**/api/articles/2026/04/14/2026-04-14-broken-image-article.json', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_ARTICLE_BROKEN_IMG) })
   )
   // Block the broken image URL so onError fires

@@ -66,14 +66,14 @@ test.beforeEach(async ({ page }) => {
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_USER) })
   )
   // Mock GitHub index (most specific match)
-  await page.route('https://raw.githubusercontent.com/iamtouchskyer/logex-data/main/index.json', (route) =>
+  await page.route('**/api/articles/index', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_INDEX) })
   )
   // Mock article JSON files
-  await page.route('https://raw.githubusercontent.com/iamtouchskyer/logex-data/main/2026/04/15/2026-04-15-test-article.json', (route) =>
+  await page.route('**/api/articles/2026/04/15/2026-04-15-test-article.json', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_ARTICLE_1) })
   )
-  await page.route('https://raw.githubusercontent.com/iamtouchskyer/logex-data/main/2026/04/14/2026-04-14-second-article.json', (route) =>
+  await page.route('**/api/articles/2026/04/14/2026-04-14-second-article.json', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_ARTICLE_2) })
   )
 })
@@ -82,8 +82,8 @@ test('landing page loads and shows article list', async ({ page }) => {
   await page.goto('/')
   await page.waitForLoadState('networkidle')
 
-  // Nav should be visible (authenticated app)
-  await expect(page.locator('.nav__logo-text')).toBeVisible()
+  // Desktop shell should be visible (authenticated app)
+  await expect(page.locator('.sidebar-wrapper--desktop .sidebar__brand')).toBeVisible()
 })
 
 test('article cards render with correct count', async ({ page }) => {

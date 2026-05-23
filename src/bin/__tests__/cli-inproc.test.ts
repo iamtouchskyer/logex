@@ -23,7 +23,7 @@ describe("logex bin (in-process)", () => {
     const writeSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
     const exitSpy = vi
       .spyOn(process, "exit")
-      .mockImplementation(((_code?: number) => undefined) as never);
+      .mockImplementation((() => undefined) as never);
     await import(BIN);
     // allow microtasks (parseAsync) to flush
     await new Promise((r) => setImmediate(r));
@@ -36,7 +36,7 @@ describe("logex bin (in-process)", () => {
     setupArgv(["list"]);
     const writeSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
     vi.spyOn(process, "exit").mockImplementation(
-      ((_code?: number) => undefined) as never,
+      (() => undefined) as never,
     );
     await import(BIN);
     await new Promise((r) => setImmediate(r));
@@ -57,7 +57,7 @@ describe("logex bin (in-process)", () => {
     const writeSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
     const exitSpy = vi
       .spyOn(process, "exit")
-      .mockImplementation(((_code?: number) => undefined) as never);
+      .mockImplementation((() => undefined) as never);
     await import(BIN);
     await new Promise((r) => setImmediate(r));
     const out = writeSpy.mock.calls.map((c) => String(c[0])).join("");
@@ -72,7 +72,7 @@ describe("logex bin (in-process)", () => {
     const errSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
     const exitSpy = vi
       .spyOn(process, "exit")
-      .mockImplementation(((_code?: number) => undefined) as never);
+      .mockImplementation((() => undefined) as never);
     await import(BIN);
     await new Promise((r) => setImmediate(r));
     // commander writes "error: unknown command 'nonexistent-cmd'" to stderr
@@ -103,7 +103,7 @@ describe("logex bin (in-process)", () => {
       }));
     });
     vi.spyOn(process, "exit").mockImplementation(
-      ((_code?: number) => undefined) as never,
+      (() => undefined) as never,
     );
     await import(BIN);
     await Promise.race([

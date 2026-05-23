@@ -16,29 +16,9 @@ import { Landing } from './pages/Landing'
 import { EmptyOnboarding } from './components/EmptyOnboarding'
 import { RepoNotFoundError, UnauthenticatedError, clearMemCache } from './lib/storage/GitHubAdapter'
 import { useT } from './lib/i18n'
+import { isAllowedAvatarUrl } from './lib/avatar'
 
 const SIDEBAR_COLLAPSED_KEY = 'logex-sidebar-collapsed'
-
-/**
- * F-7: GitHub avatar URLs are the only legitimate `user.avatar` source —
- * our `/api/auth/me` returns whatever GitHub's /user sends back. A
- * compromised/forged user object could carry an attacker-controlled URL
- * that (a) phones home on render or (b) tracks the logged-in user. Hard
- * allowlist the host — anything else falls back to rendering no avatar.
- */
-const ALLOWED_AVATAR_HOSTS: readonly string[] = [
-  'avatars.githubusercontent.com',
-]
-
-export function isAllowedAvatarUrl(url: string): boolean {
-  try {
-    const u = new URL(url)
-    if (u.protocol !== 'https:') return false
-    return ALLOWED_AVATAR_HOSTS.includes(u.host)
-  } catch {
-    return false
-  }
-}
 
 function HamburgerIcon() {
   return (
