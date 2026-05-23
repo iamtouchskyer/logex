@@ -1,6 +1,12 @@
 import { readFileSync } from 'fs'
 import type { JournalEntry, ContentBlock, Message } from './types'
 
+interface NormalizedEntry {
+  role: 'user' | 'assistant'
+  content: string | ContentBlock[]
+  timestamp: string
+}
+
 /**
  * Parse a JSONL file into journal entries.
  * Skips blank lines and malformed JSON.
@@ -27,6 +33,68 @@ export function parseJsonl(filepath: string): JournalEntry[] {
   return entries
 }
 
+function normalizeEntry(entry: JournalEntry): NormalizedEntry | null {
+  if ((entry.type === 'user' || entry.type === 'assistant') && entry.message) {
+    return {
+      role: entry.type,
+      content: entry.message.content,
+      timestamp: entry.timestamp ?? '',
+    }
+  }
+
+  if (entry.type !== 'response_item') return null
+  const payload = entry.payload
+  if (payload?.type !== 'message') return null
+  if (payload.role !== 'user' && payload.role !== 'assistant') return null
+  if (payload.content === undefined) return null
+  return { role: payload.role, content: payload.content, timestamp: entry.timestamp ?? '' }
+}
+
+function shouldSkipText(text: string): boolean {
+  const trimmed = text.trim()
+  return trimmed.includes('<system-reminder>')
+    || trimmed.startsWith('Base directory for this skill:')
+    || trimmed.startsWith('<command-message>')
+}
+
+function extractTextFromContent(content: string | ContentBlock[]): {
+  text: string
+  isToolOutput: boolean
+} {
+  if (typeof content === 'string') return { text: content, isToolOutput: false }
+
+  const userTexts: string[] = []
+  const toolTexts: string[] = []
+
+  for (const block of content) {
+    if (typeof block !== 'object' || !block) continue
+    if (block.type === 'text' || block.type === 'input_text' || block.type === 'output_text') {
+      const text = block.text ?? ''
+      if (!shouldSkipText(text)) userTexts.push(text)
+    } else if (block.type === 'tool_result') {
+      appendToolText(block.content, toolTexts)
+    }
+  }
+
+  return {
+    text: userTexts.join('\n'),
+    isToolOutput: toolTexts.length > 0 && userTexts.length === 0,
+  }
+}
+
+function appendToolText(content: string | ContentBlock[] | undefined, out: string[]): void {
+  if (typeof content === 'string') {
+    out.push(content.slice(0, 300))
+    return
+  }
+  if (!Array.isArray(content)) return
+  for (const item of content) {
+    if (typeof item === 'object' && item?.type === 'text') {
+      out.push((item.text ?? '').slice(0, 300))
+    }
+  }
+}
+
 /**
  * Extract clean messages from journal entries.
  * Separates user text from tool output; skips system reminders and skill preambles.
@@ -35,64 +103,18 @@ export function extractMessages(entries: JournalEntry[]): Message[] {
   const messages: Message[] = []
 
   for (const entry of entries) {
-    const entryType = entry.type
-    if (entryType !== 'user' && entryType !== 'assistant') continue
+    const normalized = normalizeEntry(entry)
+    if (!normalized) continue
 
-    const msg = entry.message
-    if (!msg) continue
-
-    let text: string
-    let isToolOutput = false
-
-    if (typeof msg === 'string') {
-      text = msg
-    } else if (typeof msg === 'object') {
-      const content = msg.content
-      if (Array.isArray(content)) {
-        const userTexts: string[] = []
-        const toolTexts: string[] = []
-
-        for (const block of content as ContentBlock[]) {
-          if (typeof block !== 'object' || !block) continue
-
-          if (block.type === 'text') {
-            const t = block.text ?? ''
-            // Skip system reminders entirely
-            if (t.includes('<system-reminder>')) continue
-            // Skip skill/command preambles
-            if (t.trim().startsWith('Base directory for this skill:')) continue
-            if (t.trim().startsWith('<command-message>')) continue
-            userTexts.push(t)
-          } else if (block.type === 'tool_result') {
-            const tc = block.content
-            if (Array.isArray(tc)) {
-              for (const item of tc as ContentBlock[]) {
-                if (typeof item === 'object' && item?.type === 'text') {
-                  toolTexts.push((item.text ?? '').slice(0, 300))
-                }
-              }
-            } else if (typeof tc === 'string') {
-              toolTexts.push(tc.slice(0, 300))
-            }
-          }
-        }
-
-        text = userTexts.join('\n')
-        isToolOutput = toolTexts.length > 0 && userTexts.length === 0
-      } else {
-        text = String(content ?? '')
-      }
-    } else {
-      continue
-    }
+    const { text, isToolOutput } = extractTextFromContent(normalized.content)
 
     if (!text.trim() || text.trim().length < 10) continue
 
     messages.push({
-      role: entryType as 'user' | 'assistant',
+      role: normalized.role,
       text,
       isToolOutput,
-      timestamp: entry.timestamp ?? '',
+      timestamp: normalized.timestamp,
     })
   }
 

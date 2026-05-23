@@ -78,6 +78,36 @@ describe('extractMessages', () => {
     expect(msgs[1].role).toBe('assistant')
   })
 
+  it('extracts Codex response_item messages', () => {
+    const entries: JournalEntry[] = [
+      {
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: 'Please fix the parser for Codex sessions' }],
+        },
+        timestamp: '2026-05-20T03:28:03Z',
+        sessionId: 's1',
+      },
+      {
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'output_text', text: 'I will inspect the session format first.' }],
+        },
+        timestamp: '2026-05-20T03:28:20Z',
+        sessionId: 's1',
+      },
+    ]
+
+    const msgs = extractMessages(entries)
+    expect(msgs).toHaveLength(2)
+    expect(msgs[0]).toMatchObject({ role: 'user', text: 'Please fix the parser for Codex sessions' })
+    expect(msgs[1]).toMatchObject({ role: 'assistant', text: 'I will inspect the session format first.' })
+  })
+
   it('skips non-user, non-assistant entries', () => {
     const entries: JournalEntry[] = [
       {

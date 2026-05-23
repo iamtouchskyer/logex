@@ -1,13 +1,14 @@
 export interface JournalEntry {
   type: 'user' | 'assistant' | string
-  message: { role?: string; content: string | ContentBlock[] }
+  message?: { role?: string; content: string | ContentBlock[] }
+  payload?: { type?: string; role?: string; content?: string | ContentBlock[] }
   timestamp: string
   sessionId: string
   uuid?: string
 }
 
 export interface ContentBlock {
-  type: 'text' | 'tool_use' | 'tool_result'
+  type: 'text' | 'input_text' | 'output_text' | 'tool_use' | 'tool_result'
   text?: string
   content?: string | ContentBlock[]
 }
