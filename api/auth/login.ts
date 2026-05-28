@@ -27,17 +27,12 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   // Set state cookie for CSRF protection
   res.setHeader('Set-Cookie', `oauth_state=${state}; Path=/; HttpOnly; SameSite=Lax; Max-Age=600`)
 
-  // Minimum-privilege scope: `read:user` only. The access_token from this
-  // flow can read the authenticated user's public-repo contents via
-  // `/repos/:login/logex-data/contents/...` when the repo is public — no
-  // `repo` or `public_repo` scope required for reads against public repos.
-  // Private logex-data repos are NOT supported on the read:user scope; the
-  // server surfaces INSUFFICIENT_SCOPE for those and the UI points users at
-  // `gh repo create --public` (see EmptyOnboarding).
+  // `repo` scope is required to read private logex-data repos via the
+  // GitHub Contents API. `read:user` alone only works for public repos.
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: redirectUri,
-    scope: 'read:user',
+    scope: 'repo read:user',
     state,
   })
 

@@ -98,7 +98,7 @@ export async function fetchFromUserRepo(
       status: 403,
       body: {
         error: 'INSUFFICIENT_SCOPE',
-        message: 'Your logex-data repo appears to be private. Make it public (gh repo edit --visibility public) or install the logex GitHub App (coming soon).',
+        message: 'OAuth token lacks required scope. Please sign out and sign in again to re-authorize.',
       },
     }
   }
