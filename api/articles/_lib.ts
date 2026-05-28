@@ -48,11 +48,16 @@ export async function fetchFromUserRepo(
   path: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<FetchResult> {
+  // Prefer server-side GITHUB_TOKEN (PAT with repo scope) over the user's
+  // OAuth token. The GitHub App OAuth flow only grants identity scopes —
+  // it cannot read private repos. GITHUB_TOKEN is the owner's PAT and
+  // gives access to their own private repos.
+  const token = process.env.GITHUB_TOKEN || accessToken
   const url = `${GITHUB_API}/repos/${encodeURIComponent(login)}/logex-data/contents/${path}`
   const res = await fetchImpl(url, {
     headers: {
       Accept: 'application/vnd.github.raw+json',
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `Bearer ${token}`,
       'User-Agent': 'logex-io',
     },
   })
@@ -72,7 +77,7 @@ export async function fetchFromUserRepo(
     const repoCheck = await fetchImpl(`${GITHUB_API}/repos/${encodeURIComponent(login)}/logex-data`, {
       headers: {
         Accept: 'application/vnd.github+json',
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${token}`,
         'User-Agent': 'logex-io',
       },
     })
