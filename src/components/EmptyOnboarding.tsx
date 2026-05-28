@@ -14,7 +14,7 @@ interface Step { title: string; code: string }
  * other unrecoverable error. Shows copy-paste CLI steps to create the
  * user's `<login>/logex-data` repo and start writing.
  */
-export function EmptyOnboarding({ login, error, onRetry }: EmptyOnboardingProps): ReactNode {
+export function EmptyOnboarding({ login, error, onRetry, onLogout }: EmptyOnboardingProps & { onLogout?: () => void }): ReactNode {
   const who = login ?? '<login>'
   const steps: Step[] = [
     { title: '1. Install the logex CLI', code: 'npm install -g @touchskyer/logex' },
@@ -27,7 +27,14 @@ export function EmptyOnboarding({ login, error, onRetry }: EmptyOnboardingProps)
 
   return (
     <div className="onboarding" role="region" aria-labelledby="onboarding-title">
-      <h1 id="onboarding-title" className="onboarding__title">Get started with logex</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1 id="onboarding-title" className="onboarding__title">Get started with logex</h1>
+        {onLogout && (
+          <button type="button" className="nav__logout" onClick={onLogout}>
+            Sign out
+          </button>
+        )}
+      </div>
       {error ? (
         <div className="onboarding__error" role="alert">
           <p>{error}</p>

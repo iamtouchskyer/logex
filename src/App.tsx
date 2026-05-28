@@ -191,7 +191,7 @@ function App() {
     return (
       <div className="app">
         <main className="main" id="main-content">
-          <EmptyOnboarding login={user.login} />
+          <EmptyOnboarding login={user.login} onLogout={logout} />
         </main>
       </div>
     )
@@ -206,6 +206,7 @@ function App() {
             login={user.login}
             error={error}
             onRetry={() => setLoadAttempt((n) => n + 1)}
+            onLogout={logout}
           />
         </main>
       </div>
