@@ -5,9 +5,9 @@
  * from the project palette in `src/lib/gradients.ts` so the pipeline never
  * blocks on a missing optional dep.
  *
- * TODO(merge): skill.md hero step should say:
- *   "hero image auto-generated (gradient fallback when image-x unavailable)"
- * Agent B owns the skill.md migration; the orchestrator will resolve in merge.
+ * Style system: 10 visual categories matched by tags/project, each with
+ * distinct color mood, visual motif, and composition direction. Based on
+ * brand research (Stripe, Linear, Vercel patterns via ask-ux-expert).
  */
 
 import { access, readFile, readdir, rm } from 'node:fs/promises'
@@ -20,6 +20,160 @@ import { GRADIENTS, DEFAULT_GRADIENT } from '../lib/gradients'
 export interface HeroImage {
   data: Buffer
   mime: string
+}
+
+// ─── Style taxonomy ──────────────────────────────────────────────────
+
+export interface HeroStyle {
+  id: string
+  palette: string        // color mood for the prompt
+  motif: string          // visual motif / composition
+  composition: string    // layout / framing direction
+}
+
+const STYLES: HeroStyle[] = [
+  {
+    id: 'debugging',
+    palette: 'warm amber and deep red tones on charcoal background, warning signal atmosphere',
+    motif: 'fractured circuit board traces, broken connection nodes, glitch artifacts, error signal waves',
+    composition: 'asymmetric, off-center focal point, tension and disruption',
+  },
+  {
+    id: 'architecture',
+    palette: 'cool blueprint blue and silver-grey on deep navy, technical precision',
+    motif: 'layered architectural planes, isometric grid structures, node-and-edge graphs, modular blocks',
+    composition: 'structured grid layout, orthographic perspective, clean alignment',
+  },
+  {
+    id: 'frontend',
+    palette: 'vibrant gradient from magenta #FF71CE through violet to electric blue, creative energy',
+    motif: 'frosted glass panels, rounded UI cards, color swatches, pixel grid fragments',
+    composition: 'overlapping translucent layers, depth-of-field blur, playful angles',
+  },
+  {
+    id: 'testing',
+    palette: 'teal #059669 and forest green with subtle gold accents on dark background, confidence',
+    motif: 'pipeline flow arrows, checkmark sequences, parallel test lanes, green status indicators',
+    composition: 'horizontal flow left-to-right, parallel tracks, orderly progression',
+  },
+  {
+    id: 'security',
+    palette: 'neon cyan #00FFFF and electric blue on near-black #0A0E27, high-tech surveillance',
+    motif: 'shield geometry, encrypted mesh patterns, lock mechanisms, hexagonal grid cells',
+    composition: 'centered radial symmetry, scanning line effects, contained and protected',
+  },
+  {
+    id: 'ai-agent',
+    palette: 'deep purple #5E6AD2 and soft violet with luminous glow accents, intelligent and alive',
+    motif: 'neural constellation dots and lines, brain-like wave patterns, particle networks, data streams',
+    composition: 'expanding from center, organic network growth, gentle radial glow',
+  },
+  {
+    id: 'infra',
+    palette: 'warm orange #F59E0B through ember red #EF4444 on dark grey, industrial power',
+    motif: 'terminal window frames, pipeline arrows, gear mechanisms, container stack shapes',
+    composition: 'mechanical precision, stacked layers, vertical hierarchy',
+  },
+  {
+    id: 'content',
+    palette: 'cool indigo #6366F1 and slate blue on warm cream undertone, editorial sophistication',
+    motif: 'abstract book page shapes, flowing pen stroke curves, markdown syntax symbols, text blocks',
+    composition: 'horizontal reading flow, layered paper depth, typographic negative space',
+  },
+  {
+    id: 'data',
+    palette: 'teal #0D9488 and emerald #10B981 with clean white accents, structured clarity',
+    motif: 'spreadsheet cell grids, stacked document layers, bar chart silhouettes, table structures',
+    composition: 'grid-based, tabular alignment, structured compartments',
+  },
+  {
+    id: 'product',
+    palette: 'coral #FF5577 through pink #EC4899 to magenta #D44DF0 on deep purple, launch energy',
+    motif: 'lightbulb sparks, upward trajectory arrows, market trend curves, rocket trail streaks',
+    composition: 'dynamic diagonal upward sweep, ascending energy, expansive',
+  },
+]
+
+const DEFAULT_STYLE: HeroStyle = {
+  id: 'default',
+  palette: 'deep blue to purple gradient on dark background, modern developer aesthetic',
+  motif: 'abstract geometric shapes, subtle grid patterns, floating polygons',
+  composition: 'balanced, centered, clean negative space',
+}
+
+/** Tag → style ID mapping. First match wins. */
+const TAG_STYLE_MAP: Record<string, string> = {
+  // debugging
+  debugging: 'debugging', error: 'debugging', fix: 'debugging', bugfix: 'debugging',
+  // architecture
+  architecture: 'architecture', 'multi-agent': 'architecture', refactoring: 'architecture',
+  'design-pattern': 'architecture', 'agent-workflow': 'architecture',
+  // frontend
+  frontend: 'frontend', 'design-system': 'frontend', UI: 'frontend', css: 'frontend',
+  accessibility: 'frontend', responsive: 'frontend',
+  // testing
+  testing: 'testing', playwright: 'testing', vitest: 'testing', e2e: 'testing',
+  ci: 'testing', 'code-review': 'testing',
+  // security
+  security: 'security', auth: 'security', oauth: 'security', jwt: 'security',
+  // ai-agent
+  AI: 'ai-agent', 'ai-agent': 'ai-agent', 'claude-code': 'ai-agent', llm: 'ai-agent',
+  // infra
+  cli: 'infra', git: 'infra', devops: 'infra', docker: 'infra',
+  opc: 'infra', 'opc-loop': 'infra',
+  // content
+  logex: 'content', blog: 'content', memex: 'content', 'silicon-team': 'content',
+  publishing: 'content',
+  // data
+  ooxml: 'data', 'python-docx': 'data', 'python-pptx': 'data', excel: 'data',
+  'chart-agent': 'data', visualization: 'data',
+  // product
+  'hn-pain-point': 'product', 'idea-factory': 'product', 'dream-works': 'product',
+  startup: 'product', product: 'product', business: 'product',
+}
+
+/** Project → style ID fallback (when no tag matches). */
+const PROJECT_STYLE_MAP: Record<string, string> = {
+  mitsein: 'architecture',
+  dumare: 'frontend',
+  logex: 'content',
+  opc: 'infra',
+  memex: 'content',
+  'silicon-team': 'content',
+  'silicon-team-book': 'content',
+  'dream-works': 'product',
+  'idea-factory': 'product',
+  'chart-agent': 'data',
+  'ooxml-core': 'data',
+  'ooxml-stack': 'data',
+  'python-docx': 'data',
+  'python-pptx': 'data',
+  'suri-counsel': 'security',
+  'cli-x': 'infra',
+  'ink-flow': 'content',
+  societas: 'architecture',
+  'explore-projects': 'product',
+}
+
+/** Pick the best style for an article based on tags, then project. */
+export function pickStyle(tags?: string[], project?: string): HeroStyle {
+  if (tags) {
+    for (const tag of tags) {
+      const id = TAG_STYLE_MAP[tag]
+      if (id) {
+        const style = STYLES.find((s) => s.id === id)
+        if (style) return style
+      }
+    }
+  }
+  if (project) {
+    const id = PROJECT_STYLE_MAP[project]
+    if (id) {
+      const style = STYLES.find((s) => s.id === id)
+      if (style) return style
+    }
+  }
+  return DEFAULT_STYLE
 }
 
 /** Parse a CSS `linear-gradient(...)` string into angle + stops. */
@@ -160,6 +314,8 @@ export async function generateWithImageX(
     timeoutMs?: number
     scriptPath?: string
     env?: NodeJS.ProcessEnv
+    tags?: string[]
+    project?: string
   } = {},
 ): Promise<HeroImage> {
   const env = opts.env ?? process.env
@@ -172,10 +328,8 @@ export async function generateWithImageX(
   const size = opts.size ?? '1200*630'
   const timeoutMs = opts.timeoutMs ?? 120_000
 
-  const prompt =
-    `Minimalist, dark-themed abstract illustration for a technical blog post titled "${title.slice(0, 160)}". `
-    + `Style: geometric shapes, subtle gradient, developer aesthetic, high contrast. `
-    + `No text in the image. Clean, modern, editorial.`
+  const style = pickStyle(opts.tags, opts.project)
+  const prompt = buildHeroPrompt(title, style)
 
   const outDir = mkdtempSync(join(tmpdir(), `logex-hero-${slug}-`))
 
@@ -222,6 +376,17 @@ export async function generateWithImageX(
   }
 }
 
+/** Build a style-aware prompt for hero image generation. */
+export function buildHeroPrompt(title: string, style: HeroStyle): string {
+  return (
+    `Abstract illustration for a technical blog post titled "${title.slice(0, 140)}". `
+    + `Color: ${style.palette}. `
+    + `Motif: ${style.motif}. `
+    + `Composition: ${style.composition}. `
+    + `No text, no words, no letters in the image. Clean, modern, editorial quality.`
+  )
+}
+
 /** Top-level entry: image-x if available & working, else gradient. */
 export async function generateHeroImage(
   slug: string,
@@ -230,6 +395,8 @@ export async function generateHeroImage(
     detect?: typeof detectImageX
     viaImageX?: typeof generateWithImageX
     viaGradient?: typeof generateGradientHero
+    tags?: string[]
+    project?: string
   } = {},
 ): Promise<HeroImage> {
   const detect = opts.detect ?? detectImageX
@@ -238,7 +405,10 @@ export async function generateHeroImage(
 
   if (await detect()) {
     try {
-      return await viaImageX(slug, title)
+      return await viaImageX(slug, title, {
+        tags: opts.tags,
+        project: opts.project,
+      })
     } catch {
       // fall through to gradient
     }

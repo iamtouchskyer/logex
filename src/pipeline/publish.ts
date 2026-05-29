@@ -796,7 +796,10 @@ export async function publishRun(input: PublishRunInput): Promise<PublishRunResu
       preservedHeroImage = `/${imgPath}`
     } else if (!skipHero && (!preservedHeroImage || preservedHeroImage.trim() === '')) {
       try {
-        const img = await generateHeroImage(slug!, article.title)
+        const img = await generateHeroImage(slug!, article.title, {
+          tags: article.tags,
+          project: article.project,
+        })
         const ext = img.mime === 'image/png' ? 'png'
           : img.mime === 'image/svg+xml' ? 'svg'
           : 'png'
