@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getAuthWithRefresh } from '../share/_lib.js'
+import { getAuthUserFull } from '../share/_lib.js'
 import { isSafeArticlePath } from '../articles/_lib.js'
 
 const GITHUB_API = 'https://api.github.com'
@@ -19,8 +19,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return
   }
 
-  const session = await getAuthWithRefresh(req.headers.cookie, res)
-  if (!session || !session.access_token) {
+  // Prefer server-side GITHUB_TOKEN (same pattern as articles/_lib.ts:55).
+  // Hero images are decorative — they don't need per-user OAuth gating.
+  // Fall back to user's OAuth token only if GITHUB_TOKEN is unset.
+  const session = getAuthUserFull(req.headers.cookie)
+  const token = process.env.GITHUB_TOKEN || session?.access_token
+  const login = session?.login
+
+  if (!token || !login) {
     res.status(401).json({ error: 'Unauthorized' })
     return
   }
@@ -41,13 +47,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
     return
   }
 
-  const url = `${GITHUB_API}/repos/${encodeURIComponent(session.login)}/logex-data/contents/images/${path}`
+  const url = `${GITHUB_API}/repos/${encodeURIComponent(login)}/logex-data/contents/images/${path}`
 
   try {
     const upstream = await fetch(url, {
       headers: {
         Accept: 'application/vnd.github.raw',
-        Authorization: `Bearer ${session.access_token}`,
+        Authorization: `Bearer ${token}`,
         'User-Agent': 'logex-io',
       },
     })
