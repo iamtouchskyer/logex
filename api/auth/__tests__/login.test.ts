@@ -2,7 +2,7 @@
  * Tests for api/auth/login.ts — the OAuth initiator.
  * Guards:
  *   - state is CSPRNG hex (not Math.random)
- *   - scope is read:user (not repo)
+ *   - scope is "repo read:user" (repo needed for private logex-data)
  *   - state cookie carries Lax + HttpOnly
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -29,14 +29,13 @@ describe('api/auth/login', () => {
     vi.restoreAllMocks()
   })
 
-  it('redirects to GitHub OAuth with scope=read:user only', () => {
+  it('redirects to GitHub OAuth with scope=repo+read:user', () => {
     const res = mockRes()
     loginHandler({ headers: {} } as any, res)
     const url = res.redirected as string
     expect(url).toContain('github.com/login/oauth/authorize')
-    expect(url).toContain('scope=read%3Auser')
-    // Must NOT include write-grant scopes
-    expect(url).not.toMatch(/scope=[^&]*\brepo\b/)
+    expect(url).toContain('scope=repo+read%3Auser')
+    // Must NOT include write-grant scopes beyond repo
     expect(url).not.toMatch(/public_repo/)
   })
 
