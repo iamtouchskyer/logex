@@ -1,7 +1,9 @@
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { createLogexServer } from "../server.js";
+
+const cleanup: Array<() => Promise<void>> = [];
 
 async function makeClient() {
   const server = createLogexServer();
@@ -9,8 +11,16 @@ async function makeClient() {
   await server.connect(serverT);
   const client = new Client({ name: "test", version: "0.0.0" });
   await client.connect(clientT);
+  cleanup.push(async () => {
+    await Promise.allSettled([client.close(), server.close()]);
+  });
   return { client, server };
 }
+
+afterEach(async () => {
+  const pending = cleanup.splice(0);
+  await Promise.all(pending.map((close) => close()));
+});
 
 describe("logex MCP server (in-process)", () => {
   it("lists the 3 registered tools", async () => {

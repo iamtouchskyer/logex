@@ -10,6 +10,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 // Some tests use fetchMock, others replace global.fetch directly.
 const fetchMock = vi.fn<(input: unknown, init?: unknown) => Promise<Response>>();
 const originalFetch = globalThis.fetch;
+const cleanup: Array<() => Promise<void>> = [];
 
 beforeEach(() => {
   fetchMock.mockReset();
@@ -18,7 +19,9 @@ beforeEach(() => {
   process.env.GITHUB_TOKEN = "ghp_FAKE_" + "A".repeat(36);
 });
 
-afterEach(() => {
+afterEach(async () => {
+  const pending = cleanup.splice(0);
+  await Promise.all(pending.map((close) => close()));
   globalThis.fetch = originalFetch;
   delete process.env.GITHUB_TOKEN;
 });
@@ -42,6 +45,9 @@ async function connectedClient() {
   await server.connect(serverTx);
   const client = new Client({ name: "test", version: "0.0.0" });
   await client.connect(clientTx);
+  cleanup.push(async () => {
+    await Promise.allSettled([client.close(), server.close()]);
+  });
   return { client, server };
 }
 
