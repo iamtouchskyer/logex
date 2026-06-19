@@ -692,6 +692,34 @@ describe('publishRun', () => {
       decisions: [{ newIndex: 0, action: 'insert' }],
     })
     expect(res.totalArticles).toBe(2)
+    // The committed index.json must carry totalArticles synced to the
+    // deduped articles.length, not a stale value from the input index.
+    const indexBlob = ok.rest.git.createBlob.mock.calls.find(
+      (c: unknown[]) => (c[0] as { content: string }).content.includes('"articles"'),
+    )
+    expect(indexBlob).toBeDefined()
+    const parsed = JSON.parse((indexBlob![0] as { content: string }).content)
+    expect(parsed.totalArticles).toBe(parsed.articles.length)
+    expect(parsed.totalArticles).toBe(2)
+  })
+
+  it('overwrites a stale totalArticles in the input index on merge', async () => {
+    const ok = makeOctokit()
+    const existing = { slug: '2026-04-20-a', date: '2026-04-20', sessionId, tags: [], chunkIndices: [1], primaryLang: 'zh' as const, i18n: {} }
+    const res = await publishRun({
+      octokit: asOk(ok), sessionId,
+      // Stale counter: claims 42 but only holds 1 article.
+      index: { articles: [existing], lastUpdated: '', totalArticles: 42 },
+      newArticles: [bilingualArticle({ slug: 'fresh', chunkIndices: [9] })],
+      decisions: [{ newIndex: 0, action: 'insert' }],
+    })
+    expect(res.totalArticles).toBe(2)
+    const indexBlob = ok.rest.git.createBlob.mock.calls.find(
+      (c: unknown[]) => (c[0] as { content: string }).content.includes('"articles"'),
+    )
+    const parsed = JSON.parse((indexBlob![0] as { content: string }).content)
+    expect(parsed.totalArticles).toBe(2)
+    expect(parsed.totalArticles).toBe(parsed.articles.length)
   })
 
   it('generates a default slug with session prefix when no slug provided', async () => {

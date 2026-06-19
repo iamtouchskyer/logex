@@ -170,6 +170,9 @@ interface ExistingArticleMeta {
 interface IndexFile {
   articles: ExistingArticleMeta[]
   lastUpdated: string
+  // Derived from articles.length on every merge. Optional on input so legacy
+  // index.json files (and test fixtures) without the field still typecheck.
+  totalArticles?: number
 }
 
 interface MatchDecision {
@@ -714,6 +717,7 @@ export function mergeIndex(
     return true
   })
   index.lastUpdated = date
+  index.totalArticles = index.articles.length
   return { index, results }
 }
 
