@@ -19,10 +19,11 @@ vi.mock("node:fs", () => ({
   },
 }));
 
-import { readArticleBySlug, listRecentSessions, listRecentCodexSessions, listAllSessions } from "../sessions";
+import { readArticleBySlug, listRecentSessions, listRecentCodexSessions, listRecentPiSessions, listAllSessions } from "../sessions";
 
 const projectsDir = join(homedir(), ".claude", "projects");
 const codexDir = join(homedir(), ".codex", "sessions");
+const piDir = join(homedir(), ".pi", "agent", "sessions");
 
 type MockFn = ReturnType<typeof vi.fn>;
 
@@ -275,10 +276,62 @@ describe("listRecentCodexSessions", () => {
   });
 });
 
+describe("listRecentPiSessions", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("returns [] when the pi root cannot be read", () => {
+    fsMocks.readdirSync.mockImplementation(() => {
+      throw new Error("missing dir");
+    });
+    expect(listRecentPiSessions()).toEqual([]);
+  });
+
+  it("enumerates project dirs newest first, stripping edge dashes", () => {
+    fsMocks.readdirSync.mockImplementation((p: unknown) => {
+      const s = String(p);
+      if (s === piDir) return ["--Users-touchskyer-Code-logex--", "notes"];
+      if (s === join(piDir, "--Users-touchskyer-Code-logex--")) return ["20260101_a.jsonl", "b.txt"];
+      if (s === join(piDir, "notes")) return ["c.jsonl"];
+      return [];
+    });
+    fsMocks.statSync.mockImplementation((p: unknown) => {
+      const s = String(p);
+      if (s.endsWith("notes")) return { isDirectory: () => true } as unknown as ReturnType<typeof fsMocks.statSync>;
+      if (s.endsWith("--Users-touchskyer-Code-logex--")) return { isDirectory: () => true } as unknown as ReturnType<typeof fsMocks.statSync>;
+      if (s.endsWith("20260101_a.jsonl")) return { mtimeMs: 10 } as never;
+      if (s.endsWith("c.jsonl")) return { mtimeMs: 20 } as never;
+      throw new Error("unexpected stat: " + s);
+    });
+    const out = listRecentPiSessions(10);
+    expect(out.map((e) => e.path.split("/").pop())).toEqual(["c.jsonl", "20260101_a.jsonl"]);
+    expect(out[0]).toMatchObject({ project: "notes", source: "pi", mtime: 20 });
+    expect(out[1].project).toBe("Users-touchskyer-Code-logex");
+  });
+
+  it("skips files whose statSync throws", () => {
+    fsMocks.readdirSync.mockImplementation((p: unknown) => {
+      const s = String(p);
+      if (s === piDir) return ["d"];
+      if (s === join(piDir, "d")) return ["ok.jsonl", "bad.jsonl"];
+      return [];
+    });
+    fsMocks.statSync.mockImplementation((p: unknown) => {
+      const s = String(p);
+      if (s === join(piDir, "d")) return { isDirectory: () => true } as unknown as ReturnType<typeof fsMocks.statSync>;
+      if (s.endsWith("ok.jsonl")) return { mtimeMs: 1 } as never;
+      if (s.endsWith("bad.jsonl")) throw new Error("stat failed");
+      throw new Error("unexpected stat: " + s);
+    });
+    const out = listRecentPiSessions();
+    expect(out).toHaveLength(1);
+    expect(out[0].source).toBe("pi");
+  });
+});
+
 describe("listAllSessions", () => {
   beforeEach(() => { vi.clearAllMocks(); });
 
-  it("merges claude + codex entries sorted by mtime desc", () => {
+  it("merges claude + codex + pi entries sorted by mtime desc", () => {
     fsMocks.existsSync.mockImplementation((p: unknown) => String(p) === projectsDir);
     fsMocks.readdirSync.mockImplementation((p: unknown) => {
       const s = String(p);
@@ -288,19 +341,22 @@ describe("listAllSessions", () => {
       if (s === join(codexDir, "2026")) return ["01"];
       if (s === join(codexDir, "2026", "01")) return ["01"];
       if (s === join(codexDir, "2026", "01", "01")) return ["rollout.jsonl"];
+      if (s === piDir) return ["d"];
+      if (s === join(piDir, "d")) return ["pi.jsonl"];
       return [];
     });
     fsMocks.statSync.mockImplementation((p: unknown) => {
       const s = String(p);
-      if (s === join(projectsDir, "proj")) {
+      if (s === join(projectsDir, "proj") || s === join(piDir, "d")) {
         return { isDirectory: () => true } as unknown as ReturnType<typeof fsMocks.statSync>;
       }
       if (s.endsWith("claude.jsonl")) return { mtimeMs: 300 } as never;
       if (s.endsWith("rollout.jsonl")) return { mtimeMs: 100 } as never;
+      if (s.endsWith("pi.jsonl")) return { mtimeMs: 200 } as never;
       throw new Error("unexpected stat: " + s);
     });
     const out = listAllSessions(10);
-    expect(out.map((e) => e.source)).toEqual(["claude-code", "codex"]);
+    expect(out.map((e) => e.source)).toEqual(["claude-code", "pi", "codex"]);
     expect(out[0].mtime).toBe(300);
   });
 });

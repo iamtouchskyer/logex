@@ -166,4 +166,53 @@ describe('runPrepare CLI tail', () => {
       expect(payload.sessionId).toBe('codex-sess-42')
     })
   })
+
+  it('extracts sessionId and messages from a Pi session', () => {
+    extractRichStatsMock.mockReturnValue(null)
+    const piFixture = [
+      JSON.stringify({
+        type: 'session',
+        version: 3,
+        id: 'pi-sess-uuid-9',
+        timestamp: '2026-01-01T09:59:00.000Z',
+        cwd: '/tmp/project',
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'a1b2c3d4',
+        parentId: null,
+        timestamp: '2026-01-01T10:00:00.000Z',
+        message: { role: 'user', content: USER_MSG },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'b2c3d4e5',
+        parentId: 'a1b2c3d4',
+        timestamp: '2026-01-01T10:00:05.000Z',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'thinking', thinking: 'internal reasoning' },
+            { type: 'text', text: 'Checking the refresh path now.' },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'c3d4e5f6',
+        parentId: 'b2c3d4e5',
+        timestamp: '2026-01-01T10:00:06.000Z',
+        message: { role: 'toolResult', toolCallId: 'call_1', toolName: 'bash', content: [{ type: 'text', text: 'output' }], isError: false },
+      }),
+    ]
+    withFixture(piFixture, (file) => {
+      const { io, captured } = makeIO([file, '--mode', 'article'])
+      runPrepare(io)
+      const payload = JSON.parse(captured.stdout)
+      expect(payload.sessionId).toBe('pi-sess-uuid-9')
+      expect(captured.stderr).toMatch(/Signal chunks: 1 \/ 1/)
+      expect(payload.chunkSummaries[0].preview).toContain('auth token refresh')
+      expect(payload.chunkSummaries[0].preview).not.toContain('internal reasoning')
+    })
+  })
 })

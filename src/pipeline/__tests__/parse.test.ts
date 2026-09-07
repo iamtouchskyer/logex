@@ -108,6 +108,41 @@ describe('extractMessages', () => {
     expect(msgs[1]).toMatchObject({ role: 'assistant', text: 'I will inspect the session format first.' })
   })
 
+  it('extracts Pi message entries, skipping toolResult and thinking blocks', () => {
+    const entries: JournalEntry[] = [
+      {
+        type: 'message',
+        message: { role: 'user', content: 'Please debug the failing pipeline test' },
+        timestamp: '2026-01-01T10:00:00.000Z',
+        sessionId: 's1',
+      },
+      {
+        type: 'message',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'thinking', thinking: 'internal reasoning' },
+            { type: 'text', text: 'I will inspect the session format first.' },
+          ],
+        },
+        timestamp: '2026-01-01T10:00:05.000Z',
+        sessionId: 's1',
+      },
+      {
+        type: 'message',
+        message: { role: 'toolResult', toolCallId: 'call_1', toolName: 'bash', content: [{ type: 'text', text: 'output' }], isError: false },
+        timestamp: '2026-01-01T10:00:06.000Z',
+        sessionId: 's1',
+      },
+    ]
+
+    const msgs = extractMessages(entries)
+    expect(msgs).toHaveLength(2)
+    expect(msgs[0]).toMatchObject({ role: 'user', text: 'Please debug the failing pipeline test' })
+    expect(msgs[1]).toMatchObject({ role: 'assistant', text: 'I will inspect the session format first.' })
+    expect(msgs[1].text).not.toContain('internal reasoning')
+  })
+
   it('skips non-user, non-assistant entries', () => {
     const entries: JournalEntry[] = [
       {

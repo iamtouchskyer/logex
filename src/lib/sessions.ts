@@ -11,7 +11,7 @@ export interface SessionEntry {
   path: string;
   project: string;
   mtime: number;
-  source: "claude-code" | "codex";
+  source: "claude-code" | "codex" | "pi";
 }
 
 export function listRecentSessions(limit = 10): SessionEntry[] {
@@ -78,9 +78,46 @@ export function listRecentCodexSessions(limit = 10): SessionEntry[] {
   return out.slice(0, limit);
 }
 
-/** Most recent sessions across all supported sources (Claude Code + Codex). */
+/**
+ * Pi agent sessions live at ~/.pi/agent/sessions/--<cwd-with-dashes>--/<ts>_<uuid>.jsonl.
+ * The directory name is the project label (dashes kept as-is — exact cwd
+ * reconstruction is ambiguous when paths contain dashes).
+ */
+export function listRecentPiSessions(limit = 10): SessionEntry[] {
+  const root = join(homedir(), ".pi", "agent", "sessions");
+  const out: SessionEntry[] = [];
+  for (const dir of safeReadDir(root)) {
+    const projectDir = join(root, dir);
+    let stat;
+    try {
+      stat = statSync(projectDir);
+    } catch {
+      continue;
+    }
+    if (!stat.isDirectory()) continue;
+    const project = dir.replace(/^-+|-+$/g, "") || "pi";
+    for (const f of readdirSync(projectDir)) {
+      if (!f.endsWith(".jsonl")) continue;
+      const p = join(projectDir, f);
+      try {
+        const s = statSync(p);
+        out.push({ path: p, project, mtime: s.mtimeMs, source: "pi" });
+      } catch {
+        /* skip */
+      }
+    }
+  }
+  out.sort((a, b) => b.mtime - a.mtime);
+  return out.slice(0, limit);
+}
+
+/** Most recent sessions across all supported sources (Claude Code + Codex + Pi). */
 export function listAllSessions(limit = 10): SessionEntry[] {
-  return [...listRecentSessions(limit), ...listRecentCodexSessions(limit)]
+  return [
+    ...listRecentSessions(limit),
+    ...listRecentCodexSessions(limit),
+    ...listRecentPiSessions(limit),
+  ]
     .sort((a, b) => b.mtime - a.mtime)
     .slice(0, limit);
 }

@@ -1,4 +1,5 @@
 import { parseJsonl, extractMessages } from './parse.js'
+import type { JournalEntry } from './types.js'
 import { chunkByConversation, scoreChunk, filterChunks } from './chunk.js'
 import { buildExtractionPrompt } from './prompt.js'
 import { buildChunkSummaries, buildSegmentationPrompt } from './segment.js'
@@ -25,6 +26,17 @@ function parseMode(args: string[], io: PrepareIO): { mode: Mode; rest: string[] 
   return { mode: modeVal, rest }
 }
 
+// Claude Code carries sessionId top-level; Codex rollouts in payload.session_id;
+// Pi session headers in the first entry's id (type "session").
+function resolveSessionId(entries: JournalEntry[]): string {
+  const first = entries[0]
+  if (!first) return 'unknown'
+  if (first.sessionId) return first.sessionId
+  if (first.payload?.session_id) return first.payload.session_id
+  if (first.type === 'session' && first.id) return first.id
+  return 'unknown'
+}
+
 /**
  * Prepare extraction data from a session JSONL.
  * Does NOT call any LLM API — parse, chunk, score, build summaries.
@@ -37,9 +49,7 @@ function parseMode(args: string[], io: PrepareIO): { mode: Mode; rest: string[] 
  */
 function prepareSession(jsonlPath: string, mode: Mode, io: PrepareIO): void {
   const entries = parseJsonl(jsonlPath)
-  // Claude Code carries sessionId top-level; Codex rollouts carry it in the
-  // session_meta payload (payload.session_id).
-  const sessionId = entries[0]?.sessionId ?? entries[0]?.payload?.session_id ?? 'unknown'
+  const sessionId = resolveSessionId(entries)
   io.stderr(`Session: ${sessionId}\n`)
   io.stderr(`Entries: ${entries.length}\n`)
   io.stderr(`Mode: ${mode}\n`)

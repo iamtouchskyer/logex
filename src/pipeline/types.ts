@@ -1,16 +1,21 @@
 export interface JournalEntry {
   type: 'user' | 'assistant' | string
-  message?: { role?: string; content: string | ContentBlock[] }
+  // Journal messages are heterogeneous across agents (Pi toolResult entries
+  // carry toolCallId/toolName/isError); the parser only reads role + content.
+  message?: { role?: string; content: string | ContentBlock[]; [key: string]: unknown }
   payload?: { type?: string; role?: string; content?: string | ContentBlock[]; session_id?: string }
   timestamp: string
   sessionId: string
   uuid?: string
+  id?: string
 }
 
 export interface ContentBlock {
-  type: 'text' | 'input_text' | 'output_text' | 'tool_use' | 'tool_result'
+  type: 'text' | 'input_text' | 'output_text' | 'tool_use' | 'tool_result' | 'thinking' | 'toolCall' | 'image' | string
   text?: string
   content?: string | ContentBlock[]
+  thinking?: string
+  [key: string]: unknown
 }
 
 export interface Message {

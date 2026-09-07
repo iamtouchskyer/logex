@@ -42,6 +42,17 @@ function normalizeEntry(entry: JournalEntry): NormalizedEntry | null {
     }
   }
 
+  // Pi agent sessions: {"type":"message","message":{"role":"user|assistant|...","content":...}}
+  if (entry.type === 'message' && entry.message) {
+    const role = entry.message.role
+    if (role !== 'user' && role !== 'assistant') return null
+    return {
+      role,
+      content: entry.message.content,
+      timestamp: entry.timestamp ?? '',
+    }
+  }
+
   if (entry.type !== 'response_item') return null
   const payload = entry.payload
   if (payload?.type !== 'message') return null
