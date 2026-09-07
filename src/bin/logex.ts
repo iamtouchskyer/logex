@@ -13,7 +13,9 @@ const pkg = JSON.parse(
 const program = new Command();
 program
   .name("logex")
-  .description("Write blog-style session papers from a Claude Code session JSONL")
+  .description(
+    "Write blog-style session papers from coding-agent session transcripts (Claude Code, Codex)",
+  )
   .version(pkg.version);
 
 program

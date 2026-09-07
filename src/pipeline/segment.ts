@@ -85,7 +85,7 @@ export function buildSegmentationPrompt(summaries: ChunkSummary[]): string {
     })
     .join('\n')
 
-  return `你是一个 session 分析器。下面是一个 Claude Code session 的 chunk 列表摘要。
+  return `你是一个 session 分析器。下面是一个 coding agent session 的 chunk 列表摘要。
 
 每个 chunk 是一段对话片段，包含时间范围、insight score、检测到的 project 路径、和内容预览。
 
