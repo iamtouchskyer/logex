@@ -2,7 +2,7 @@
 
 ## What Is This
 
-logex turns Claude Code session JSONL transcripts into blog-quality technical articles. It's a thin pipeline (parse → chunk → score → group) plus a React/Vite SPA that reads articles from a separate public data repo (`logex-data`). Distributed as an npm package (`@touchskyer/logex`) + Claude Code plugin + MCP server for other agents. The LLM already in the session does the topic segmentation and the writing — logex is scaffolding, not an LLM gateway.
+logex turns coding-agent session JSONL transcripts (Claude Code, Codex) into blog-quality technical articles. It's a thin pipeline (parse → chunk → score → group) plus a React/Vite SPA that reads articles from a separate public data repo (`logex-data`). Distributed as an npm package (`@touchskyer/logex`) + Claude Code plugin + MCP server for other agents. The LLM already in the session does the topic segmentation and the writing — logex is scaffolding, not an LLM gateway.
 
 ## Repo Layout
 
@@ -19,7 +19,7 @@ src/
 api/               # Vercel serverless endpoints — auth, insights, share
 .claude-plugin/    # Claude Code plugin manifest (plugin.json, marketplace.json)
 hooks/             # Stop hook shell script + hooks.json registering it
-skills/logex/      # skill.md shipped with the plugin (mirror of ~/.claude/skills/logex/skill.md)
+skills/extract/    # skill.md shipped with the plugin (name: logex)
 scripts/
 e2e/               # playwright E2E + a11y
 ```
@@ -71,7 +71,7 @@ Run `npm run test` before declaring anything done. If the test infrastructure br
 |------|---------|
 | `.claude-plugin/plugin.json` | plugin manifest — registers skill + hook paths |
 | `.claude-plugin/marketplace.json` | marketplace entry for `/plugin marketplace add iamtouchskyer/logex` |
-| `skills/logex/skill.md` | the `/logex` slash command procedure (ships inside the plugin) |
+| `skills/extract/skill.md` | the `/logex` slash command procedure (ships inside the plugin) |
 | `hooks/hooks.json` | registers the Stop hook |
 | `hooks/session-end.sh` | Stop hook body — non-blocking reminder to run `/logex` |
 

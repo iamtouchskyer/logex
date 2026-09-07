@@ -1,11 +1,11 @@
 ---
 name: logex
-description: "Write bilingual (zh + en) blog-style session papers from a Claude Code session transcript. One session → N articles (one per topic). LLM decides topic segmentation. No API key. Triggers: 'logex', 'extract session', 'session paper', '提取 session', 'write session article'."
+description: "Write bilingual (zh + en) blog-style session papers from a coding-agent session transcript (Claude Code or Codex JSONL). One session → N articles (one per topic). LLM decides topic segmentation. No API key. Triggers: 'logex', 'extract session', 'session paper', '提取 session', 'write session article'."
 ---
 
 # Logex — Write Session Papers
 
-Turn Claude Code session transcripts into blog-quality technical articles. A single session can produce **multiple articles** — one per topic/arc. The LLM (you) decides how many topics exist and which are worth writing about.
+Turn coding-agent session transcripts (Claude Code, Codex) into blog-quality technical articles. A single session can produce **multiple articles** — one per topic/arc. The LLM (you) decides how many topics exist and which are worth writing about.
 
 **All articles are bilingual (zh + en).** Every article ships with a `primary` language body and a `translations` map containing the other language. Never produce a monolingual article — the data repo, renderer, and publish pipeline all assume bilingual shape.
 
@@ -28,6 +28,8 @@ ls -t "$SESSION_DIR"/*.jsonl | head -5
 ```
 
 Pick the most recent (or current) session. If `--list`, show 10 most recent across all projects.
+
+Auto-discovery only covers Claude Code sessions (`~/.claude/projects/`). The parser also reads Codex session JSONL — for those, skip discovery and pass the path directly to the prepare script in step 2.
 
 ### 2. Run the prepare script
 

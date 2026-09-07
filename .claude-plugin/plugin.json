@@ -1,6 +1,6 @@
 {
   "name": "logex",
-  "description": "Write bilingual (zh + en) blog-style session papers from Claude Code transcripts",
+  "description": "Write bilingual (zh + en) blog-style session papers from coding-agent transcripts (Claude Code, Codex)",
   "version": "0.1.4",
   "license": "MIT",
   "keywords": [

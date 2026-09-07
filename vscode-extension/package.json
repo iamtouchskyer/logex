@@ -1,7 +1,7 @@
 {
   "name": "logex-vscode",
   "displayName": "Logex",
-  "description": "Write blog-style articles from Claude Code sessions",
+  "description": "Write blog-style articles from coding-agent sessions (Claude Code, Codex)",
   "version": "0.1.0",
   "publisher": "touchskyer",
   "engines": {

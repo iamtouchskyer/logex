@@ -1,14 +1,14 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "logex",
-  "description": "Write bilingual (zh + en) blog-style session papers from Claude Code transcripts",
+  "description": "Write bilingual (zh + en) blog-style session papers from coding-agent transcripts (Claude Code, Codex)",
   "owner": {
     "name": "iamtouchskyer"
   },
   "plugins": [
     {
       "name": "logex",
-      "description": "Write bilingual (zh + en) blog-style session papers from Claude Code transcripts",
+      "description": "Write bilingual (zh + en) blog-style session papers from coding-agent transcripts (Claude Code, Codex)",
       "version": "0.1.4",
       "source": "./"
     }
