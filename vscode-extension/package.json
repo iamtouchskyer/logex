@@ -4,6 +4,10 @@
   "description": "Prepare blog-style articles from coding-agent sessions via the logex CLI",
   "version": "0.1.0",
   "publisher": "touchskyer",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iamtouchskyer/logex"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
