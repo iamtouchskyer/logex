@@ -1,7 +1,7 @@
 {
   "name": "logex-vscode",
   "displayName": "Logex",
-  "description": "Write blog-style articles from coding-agent sessions (Claude Code, Codex)",
+  "description": "Prepare blog-style articles from coding-agent sessions via the logex CLI",
   "version": "0.1.0",
   "publisher": "touchskyer",
   "engines": {
@@ -14,7 +14,7 @@
     "commands": [
       {
         "command": "logex.writeArticle",
-        "title": "Logex: Write Article from Session"
+        "title": "Logex: Prepare Session for Article"
       }
     ]
   },
