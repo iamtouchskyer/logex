@@ -4,7 +4,7 @@ import { z } from "zod";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { listRecentSessions, readArticleBySlug } from "../lib/sessions.js";
+import { listAllSessions, readArticleBySlug } from "../lib/sessions.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(
@@ -21,7 +21,7 @@ export function createLogexServer(): McpServer {
     "logex_write",
     {
       description:
-        "Handshake/stub tool. Actual article writing runs through the /logex skill in Claude Code.",
+        "Handshake for the article-writing workflow. Returns the concrete steps any LLM agent executes with the logex CLI — the calling agent IS the LLM that segments topics and writes the articles.",
       inputSchema: {
         jsonl_path: z
           .string()
@@ -33,7 +33,16 @@ export function createLogexServer(): McpServer {
       const payload = {
         status: "ok",
         jsonl_path: jsonl_path ?? null,
-        hint: "Invoke /logex skill in Claude Code to actually write articles",
+        workflow: [
+          "logex prepare <session.jsonl> --mode article  → JSON with chunkSummaries + segmentationPrompt",
+          "Execute the segmentationPrompt yourself: group chunks into topics, mark worthWriting per group",
+          "Write one bilingual (zh + en) article per selected group; shape documented in skills/extract/skill.md",
+          "logex publish prepare-match --session-id <id> --articles <tmp.json>",
+          "If needsLlm, execute the matchingPrompt yourself and save the decisions JSON",
+          "logex publish execute --session-id <id> --articles <tmp.json> --decisions <decisions.json>",
+        ],
+        hint:
+          "No API key needed — you are the LLM. Run the steps with the logex CLI; full procedure: skills/extract/skill.md (shipped in the npm package).",
       };
       return {
         content: [{ type: "text" as const, text: JSON.stringify(payload) }],
@@ -45,11 +54,11 @@ export function createLogexServer(): McpServer {
     "logex_list",
     {
       description:
-        "List the most recent Claude Code session JSONLs (top 10 by mtime)",
+        "List the most recent session JSONLs across Claude Code (~/.claude/projects) and Codex (~/.codex/sessions), top 10 by mtime",
       inputSchema: {},
     },
     async () => {
-      const entries = listRecentSessions(10);
+      const entries = listAllSessions(10);
       return {
         content: [
           { type: "text" as const, text: JSON.stringify({ sessions: entries }) },

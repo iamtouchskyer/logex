@@ -32,13 +32,17 @@ describe("logex MCP server (in-process)", () => {
     );
   });
 
-  it("logex_write returns a stub payload when no jsonl_path", async () => {
+  it("logex_write returns the actionable workflow when no jsonl_path", async () => {
     const { client } = await makeClient();
     const res = await client.callTool({ name: "logex_write", arguments: {} });
     const content = res.content as Array<{ type: string; text: string }>;
     const payload = JSON.parse(content[0].text);
     expect(payload.status).toBe("ok");
     expect(payload.jsonl_path).toBeNull();
+    expect(Array.isArray(payload.workflow)).toBe(true);
+    expect(payload.workflow.join(" ")).toMatch(/logex prepare/);
+    expect(payload.workflow.join(" ")).toMatch(/logex publish/);
+    expect(payload.hint).toMatch(/skills\/extract\/skill\.md/);
   });
 
   it("logex_write echoes jsonl_path when provided", async () => {

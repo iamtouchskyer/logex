@@ -136,7 +136,7 @@ describe("logex_list MCP tool", () => {
   });
 });
 
-describe("logex_write stub", () => {
+describe("logex_write workflow", () => {
   it("returns ok + hint with jsonl_path", async () => {
     const { client } = await connectedClient();
     const result = await client.callTool({
