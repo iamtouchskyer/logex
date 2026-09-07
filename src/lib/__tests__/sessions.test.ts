@@ -19,9 +19,10 @@ vi.mock("node:fs", () => ({
   },
 }));
 
-import { readArticleBySlug, listRecentSessions } from "../sessions";
+import { readArticleBySlug, listRecentSessions, listRecentCodexSessions, listAllSessions } from "../sessions";
 
 const projectsDir = join(homedir(), ".claude", "projects");
+const codexDir = join(homedir(), ".codex", "sessions");
 
 type MockFn = ReturnType<typeof vi.fn>;
 
@@ -219,5 +220,87 @@ describe("listRecentSessions", () => {
     const out = listRecentSessions();
     expect(out).toHaveLength(1);
     expect(out[0].path.endsWith("ok.jsonl")).toBe(true);
+  });
+});
+
+describe("listRecentCodexSessions", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("returns [] when the codex root cannot be read", () => {
+    fsMocks.readdirSync.mockImplementation(() => {
+      throw new Error("missing dir");
+    });
+    expect(listRecentCodexSessions()).toEqual([]);
+  });
+
+  it("enumerates rollout files across YYYY/MM/DD, newest first", () => {
+    fsMocks.readdirSync.mockImplementation((p: unknown) => {
+      const s = String(p);
+      if (s === codexDir) return ["2026"];
+      if (s === join(codexDir, "2026")) return ["03"];
+      if (s === join(codexDir, "2026", "03")) return ["07", "20"];
+      if (s === join(codexDir, "2026", "03", "07")) return ["rollout-a.jsonl", "notes.txt"];
+      if (s === join(codexDir, "2026", "03", "20")) return ["rollout-b.jsonl"];
+      return [];
+    });
+    fsMocks.statSync.mockImplementation((p: unknown) => {
+      const s = String(p);
+      if (s.endsWith("rollout-a.jsonl")) return { mtimeMs: 100 } as never;
+      if (s.endsWith("rollout-b.jsonl")) return { mtimeMs: 200 } as never;
+      throw new Error("unexpected stat: " + s);
+    });
+    const out = listRecentCodexSessions(10);
+    expect(out.map((e) => e.path.split("/").pop())).toEqual(["rollout-b.jsonl", "rollout-a.jsonl"]);
+    expect(out[0]).toMatchObject({ project: "codex", source: "codex", mtime: 200 });
+  });
+
+  it("skips files whose statSync throws", () => {
+    fsMocks.readdirSync.mockImplementation((p: unknown) => {
+      const s = String(p);
+      if (s === codexDir) return ["2026"];
+      if (s === join(codexDir, "2026")) return ["03"];
+      if (s === join(codexDir, "2026", "03")) return ["07"];
+      if (s === join(codexDir, "2026", "03", "07")) return ["ok.jsonl", "bad.jsonl"];
+      return [];
+    });
+    fsMocks.statSync.mockImplementation((p: unknown) => {
+      const s = String(p);
+      if (s.endsWith("ok.jsonl")) return { mtimeMs: 5 } as never;
+      if (s.endsWith("bad.jsonl")) throw new Error("stat failed");
+      throw new Error("unexpected stat: " + s);
+    });
+    const out = listRecentCodexSessions();
+    expect(out).toHaveLength(1);
+    expect(out[0].source).toBe("codex");
+  });
+});
+
+describe("listAllSessions", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("merges claude + codex entries sorted by mtime desc", () => {
+    fsMocks.existsSync.mockImplementation((p: unknown) => String(p) === projectsDir);
+    fsMocks.readdirSync.mockImplementation((p: unknown) => {
+      const s = String(p);
+      if (s === projectsDir) return ["proj"];
+      if (s === join(projectsDir, "proj")) return ["claude.jsonl"];
+      if (s === codexDir) return ["2026"];
+      if (s === join(codexDir, "2026")) return ["01"];
+      if (s === join(codexDir, "2026", "01")) return ["01"];
+      if (s === join(codexDir, "2026", "01", "01")) return ["rollout.jsonl"];
+      return [];
+    });
+    fsMocks.statSync.mockImplementation((p: unknown) => {
+      const s = String(p);
+      if (s === join(projectsDir, "proj")) {
+        return { isDirectory: () => true } as unknown as ReturnType<typeof fsMocks.statSync>;
+      }
+      if (s.endsWith("claude.jsonl")) return { mtimeMs: 300 } as never;
+      if (s.endsWith("rollout.jsonl")) return { mtimeMs: 100 } as never;
+      throw new Error("unexpected stat: " + s);
+    });
+    const out = listAllSessions(10);
+    expect(out.map((e) => e.source)).toEqual(["claude-code", "codex"]);
+    expect(out[0].mtime).toBe(300);
   });
 });

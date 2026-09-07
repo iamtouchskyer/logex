@@ -11,6 +11,7 @@ export interface SessionEntry {
   path: string;
   project: string;
   mtime: number;
+  source: "claude-code" | "codex";
 }
 
 export function listRecentSessions(limit = 10): SessionEntry[] {
@@ -32,7 +33,7 @@ export function listRecentSessions(limit = 10): SessionEntry[] {
       const p = join(dir, f);
       try {
         const s = statSync(p);
-        out.push({ path: p, project: proj, mtime: s.mtimeMs });
+        out.push({ path: p, project: proj, mtime: s.mtimeMs, source: "claude-code" });
       } catch {
         /* skip */
       }
@@ -40,6 +41,48 @@ export function listRecentSessions(limit = 10): SessionEntry[] {
   }
   out.sort((a, b) => b.mtime - a.mtime);
   return out.slice(0, limit);
+}
+
+function safeReadDir(dir: string): string[] {
+  try {
+    return readdirSync(dir);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Codex CLI stores sessions as ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl.
+ * Missing levels are tolerated — anything unreadable just yields nothing.
+ */
+export function listRecentCodexSessions(limit = 10): SessionEntry[] {
+  const root = join(homedir(), ".codex", "sessions");
+  const out: SessionEntry[] = [];
+  for (const year of safeReadDir(root)) {
+    for (const month of safeReadDir(join(root, year))) {
+      for (const day of safeReadDir(join(root, year, month))) {
+        for (const f of safeReadDir(join(root, year, month, day))) {
+          if (!f.endsWith(".jsonl")) continue;
+          const p = join(root, year, month, day, f);
+          try {
+            const s = statSync(p);
+            out.push({ path: p, project: "codex", mtime: s.mtimeMs, source: "codex" });
+          } catch {
+            /* skip */
+          }
+        }
+      }
+    }
+  }
+  out.sort((a, b) => b.mtime - a.mtime);
+  return out.slice(0, limit);
+}
+
+/** Most recent sessions across all supported sources (Claude Code + Codex). */
+export function listAllSessions(limit = 10): SessionEntry[] {
+  return [...listRecentSessions(limit), ...listRecentCodexSessions(limit)]
+    .sort((a, b) => b.mtime - a.mtime)
+    .slice(0, limit);
 }
 
 export interface LogexArticle {
