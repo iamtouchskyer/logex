@@ -34,7 +34,8 @@ jobs:
       - name: Bump version
         run: |
           npm version "${{ inputs.version }}" --no-git-tag-version
-          git add package.json package-lock.json
+          node scripts/sync-version.mjs "${{ inputs.version }}"
+          git add package.json package-lock.json .claude-plugin/plugin.json .claude-plugin/marketplace.json server.json
           git commit -m "release: v${{ inputs.version }}"
           git tag "v${{ inputs.version }}"
           git push origin HEAD --tags

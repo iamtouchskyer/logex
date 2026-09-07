@@ -1,20 +1,22 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.iamtouchskyer/logex",
-  "description": "Write blog-style session papers from a Claude Code session JSONL",
+  "description": "Write blog-style session papers from coding-agent session transcripts (Claude Code, Codex)",
   "repository": {
     "url": "https://github.com/iamtouchskyer/logex",
     "source": "github"
   },
-  "version": "0.1.0",
+  "version": "0.1.4",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@touchskyer/logex",
-      "version": "0.1.0",
+      "version": "0.1.4",
       "transport": {
         "type": "stdio",
-        "args": ["mcp"]
+        "args": [
+          "mcp"
+        ]
       },
       "environmentVariables": []
     }
