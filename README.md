@@ -79,11 +79,21 @@ Client-side config:
 | Codex | `npm install -g @touchskyer/logex && codex mcp add logex -- logex mcp` |
 | Windsurf / others | Same pattern — command `logex`, args `["mcp"]` |
 
+Cursor reads `~/.cursor/mcp.json` (or `.cursor/mcp.json` per project); most MCP clients use the same shape:
+
+```json
+{
+  "mcpServers": {
+    "logex": { "command": "logex", "args": ["mcp"] }
+  }
+}
+```
+
 Articles are stored in the `iamtouchskyer/logex-data` repo on GitHub — logex publishes directly via the Contents API. Ensure `GITHUB_TOKEN` is set in `~/.claude/.env` with `repo` scope.
 
 ### Experimental integrations
 
-The repo also ships minimal integrations that are not part of the stable surface yet: a **VS Code extension** (`vscode-extension/`, command palette → `Logex: Write Article from Session`, runs `logex write` in an integrated terminal) and a **Pi extension** skeleton (`pi-extension/`, no runtime behavior yet).
+The repo also ships minimal integrations that are not part of the stable surface yet: a **VS Code extension** (`vscode-extension/`, command palette → `Logex: Prepare Session for Article` — picks a session, runs `logex prepare`, opens the JSON result) and a **Pi extension** skeleton (`pi-extension/`, no runtime behavior yet).
 
 ### License
 
@@ -164,11 +174,21 @@ logex mcp
 | Codex | `npm install -g @touchskyer/logex && codex mcp add logex -- logex mcp` |
 | Windsurf / 其它 | 同样的 pattern：command `logex`，args `["mcp"]` |
 
+Cursor 读取 `~/.cursor/mcp.json`（或项目级 `.cursor/mcp.json`），其它 MCP client 同构：
+
+```json
+{
+  "mcpServers": {
+    "logex": { "command": "logex", "args": ["mcp"] }
+  }
+}
+```
+
 文章保存在 `iamtouchskyer/logex-data` 仓库（直接通过 GitHub Contents API 发布；在 `~/.claude/.env` 中配好带 `repo` scope 的 `GITHUB_TOKEN`）。
 
 ### 实验性集成
 
-仓库里还有两个尚未进入稳定面的集成：**VS Code 扩展**（`vscode-extension/`，命令面板 → `Logex: Write Article from Session`，在集成终端跑 `logex write`）和 **Pi 扩展**骨架（`pi-extension/`，暂无运行时行为）。
+仓库里还有两个尚未进入稳定面的集成：**VS Code 扩展**（`vscode-extension/`，命令面板 → `Logex: Prepare Session for Article`——选 session、跑 `logex prepare`、打开 JSON 结果）和 **Pi 扩展**骨架（`pi-extension/`，暂无运行时行为）。
 
 ### License
 
@@ -241,9 +261,19 @@ logex mcp
 | Codex | `npm install -g @touchskyer/logex && codex mcp add logex -- logex mcp` |
 | Windsurf / その他 | command `logex`, args `["mcp"]` |
 
+Cursor は `~/.cursor/mcp.json`（プロジェクト単位なら `.cursor/mcp.json`）を読みます。他の MCP client も同様の形です：
+
+```json
+{
+  "mcpServers": {
+    "logex": { "command": "logex", "args": ["mcp"] }
+  }
+}
+```
+
 ### 実験的インテグレーション
 
-リポジトリには安定版前の最小統合も含まれます：**VS Code 拡張**（`vscode-extension/`、コマンドパレット → `Logex: Write Article from Session`、`logex write` を実行）と **Pi 拡張**の skeleton（`pi-extension/`、ランタイム動作は未実装）。
+リポジトリには安定版前の最小統合も含まれます：**VS Code 拡張**（`vscode-extension/`、コマンドパレット → `Logex: Prepare Session for Article`——セッションを選び `logex prepare` を実行し、JSON 結果を開く）と **Pi 拡張**の skeleton（`pi-extension/`、ランタイム動作は未実装）。
 
 ### License
 
@@ -314,9 +344,19 @@ logex mcp
 | Codex | `npm install -g @touchskyer/logex && codex mcp add logex -- logex mcp` |
 | Windsurf / 기타 | command `logex`, args `["mcp"]` |
 
+Cursor 은 `~/.cursor/mcp.json`(프로젝트 단위는 `.cursor/mcp.json`)을 읽습니다. 다른 MCP client 도 같은 구조입니다:
+
+```json
+{
+  "mcpServers": {
+    "logex": { "command": "logex", "args": ["mcp"] }
+  }
+}
+```
+
 ### 실험적 통합
 
-저장소에는 아직 안정 버전이 아닌 최소 통합도 있습니다: **VS Code 확장**(`vscode-extension/`, 커맨드 팔레트 → `Logex: Write Article from Session`, `logex write` 실행)과 **Pi 확장** skeleton(`pi-extension/`, 런타임 동작 미구현).
+저장소에는 아직 안정 버전이 아닌 최소 통합도 있습니다: **VS Code 확장**(`vscode-extension/`, 커맨드 팔레트 → `Logex: Prepare Session for Article`——세션을 고르고 `logex prepare`를 실행해 JSON 결과를 엽니다)과 **Pi 확장** skeleton(`pi-extension/`, 런타임 동작 미구현).
 
 ### License
 
@@ -387,9 +427,19 @@ logex mcp
 | Codex | `npm install -g @touchskyer/logex && codex mcp add logex -- logex mcp` |
 | Windsurf / otros | command `logex`, args `["mcp"]` |
 
+Cursor lee `~/.cursor/mcp.json` (o `.cursor/mcp.json` por proyecto); la mayoría de clientes MCP usan la misma forma:
+
+```json
+{
+  "mcpServers": {
+    "logex": { "command": "logex", "args": ["mcp"] }
+  }
+}
+```
+
 ### Integraciones experimentales
 
-El repo también incluye integraciones mínimas que aún no son parte de la superficie estable: una **extensión de VS Code** (`vscode-extension/`, paleta de comandos → `Logex: Write Article from Session`, ejecuta `logex write`) y un esqueleto de **extensión Pi** (`pi-extension/`, sin comportamiento en runtime todavía).
+El repo también incluye integraciones mínimas que aún no son parte de la superficie estable: una **extensión de VS Code** (`vscode-extension/`, paleta de comandos → `Logex: Prepare Session for Article` — elige una sesión, ejecuta `logex prepare` y abre el JSON resultante) y un esqueleto de **extensión Pi** (`pi-extension/`, sin comportamiento en runtime todavía).
 
 ### Licencia
 
