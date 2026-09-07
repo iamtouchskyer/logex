@@ -35,14 +35,16 @@ In Claude Code, just run:
 Under the hood the skill runs:
 
 ```bash
-logex write                # parse → chunk → score → segment (LLM) → write (LLM) → publish
-logex list                 # show recent sessions
+logex write                # /logex entry point — points at the workflow below
+logex list                 # recent sessions (Claude Code + Codex)
+logex prepare <jsonl>      # parse → chunk → score → segmentation prompt (no LLM)
+logex publish ...          # publish articles to the logex-data repo
 logex mcp                  # start MCP server for other agents
 ```
 
 The agent is the one deciding topic boundaries and drafting the prose — `logex` is the scaffolding around it.
 
-**Supported transcripts.** The parser reads both Claude Code and Codex session JSONL. Auto-discovery (`logex list`, and `/logex` with no argument) only scans `~/.claude/projects/`, so for a Codex session pass the JSONL path explicitly: `/logex <path.jsonl>`.
+**Supported transcripts.** The parser reads both Claude Code and Codex session JSONL. Auto-discovery (`logex list`) scans both `~/.claude/projects/` and `~/.codex/sessions/`; you can also pass any JSONL path directly: `/logex <path.jsonl>`.
 
 ### Claude Code integration (plugin + skill + hook)
 
@@ -118,14 +120,16 @@ npm install -g @touchskyer/logex
 背后调用：
 
 ```bash
-logex write                # parse → chunk → score → 话题切分（LLM）→ 写作（LLM）→ publish
-logex list                 # 列最近 session
+logex write                # /logex 入口 —— 指向下面的工作流命令
+logex list                 # 最近 session（Claude Code + Codex）
+logex prepare <jsonl>      # parse → chunk → score → 切分 prompt（无 LLM）
+logex publish ...          # 发布文章到 logex-data 仓库
 logex mcp                  # 给其它 agent 暴露 MCP server
 ```
 
 话题切分和正文都是 agent 自己决定，`logex` 只做周边脚手架。
 
-**支持的 transcript 格式。** parser 同时认 Claude Code 和 Codex 的 session JSONL。自动发现(`logex list`、不带参数的 `/logex`)只扫描 `~/.claude/projects/`，Codex session 需要显式传路径：`/logex <path.jsonl>`。
+**支持的 transcript 格式。** parser 同时认 Claude Code 和 Codex 的 session JSONL。自动发现（`logex list`）同时扫描 `~/.claude/projects/` 和 `~/.codex/sessions/`；也可以直接传任意 JSONL 路径：`/logex <path.jsonl>`。
 
 ### Claude Code 集成（plugin + skill + hook）
 
@@ -201,12 +205,14 @@ Claude Code 内で:
 内部的に呼ぶコマンド:
 
 ```bash
-logex write                # parse → chunk → score → 分割（LLM）→ 執筆（LLM）→ publish
-logex list                 # セッション一覧
+logex write                # /logex エントリポイント —— 下記ワークフローへの導線
+logex list                 # 最近のセッション（Claude Code + Codex）
+logex prepare <jsonl>      # parse → chunk → score → 分割プロンプト（LLM 不要）
+logex publish ...          # 記事を logex-data リポジトリへ publish
 logex mcp                  # 他 agent 向け MCP server
 ```
 
-**対応トランスクリプト。** parser は Claude Code と Codex の両方のセッション JSONL を読めます。自動検出（`logex list`、引数なしの `/logex`）は `~/.claude/projects/` のみ走査するため、Codex セッションは JSONL パスを明示的に指定してください：`/logex <path.jsonl>`。
+**対応トランスクリプト。** parser は Claude Code と Codex の両方のセッション JSONL を読めます。自動検出（`logex list`）は `~/.claude/projects/` と `~/.codex/sessions/` の両方を走査します。任意の JSONL パスを直接指定することもできます：`/logex <path.jsonl>`。
 
 ### Claude Code 連携 (plugin + skill + hook)
 
@@ -274,12 +280,14 @@ Claude Code 에서:
 내부 실행 명령:
 
 ```bash
-logex write                # parse → chunk → score → 분할(LLM) → 작성(LLM) → publish
-logex list                 # 세션 목록
+logex write                # /logex 진입점 —— 아래 워크플로 명령 안내
+logex list                 # 최근 세션 (Claude Code + Codex)
+logex prepare <jsonl>      # parse → chunk → score → 분할 프롬프트 (LLM 불필요)
+logex publish ...          # logex-data 저장소에 기사 publish
 logex mcp                  # 다른 agent 를 위한 MCP server
 ```
 
-**지원 트랜스크립트.** parser 는 Claude Code 와 Codex 세션 JSONL 을 모두 읽습니다. 자동 탐색(`logex list`, 인자 없는 `/logex`)은 `~/.claude/projects/` 만 스캔하므로, Codex 세션은 JSONL 경로를 직접 지정하세요: `/logex <path.jsonl>`.
+**지원 트랜스크립트.** parser 는 Claude Code 와 Codex 세션 JSONL 을 모두 읽습니다. 자동 탐색(`logex list`)은 `~/.claude/projects/` 와 `~/.codex/sessions/` 를 모두 스캔합니다. 임의의 JSONL 경로를 직접 지정할 수도 있습니다: `/logex <path.jsonl>`.
 
 ### Claude Code 통합 (plugin + skill + hook)
 
@@ -345,12 +353,14 @@ En Claude Code:
 Comandos subyacentes:
 
 ```bash
-logex write                # parse → chunk → score → segmentar (LLM) → escribir (LLM) → publish
-logex list                 # listar sesiones
+logex write                # punto de entrada de /logex — apunta al flujo de abajo
+logex list                 # sesiones recientes (Claude Code + Codex)
+logex prepare <jsonl>      # parse → chunk → score → prompt de segmentación (sin LLM)
+logex publish ...          # publica artículos en el repo logex-data
 logex mcp                  # servidor MCP para otros agentes
 ```
 
-**Transcripts admitidos.** El parser lee tanto JSONL de Claude Code como de Codex. El autodescubrimiento (`logex list`, y `/logex` sin argumento) escanea `~/.claude/projects/`, así que para una sesión de Codex hay que pasar la ruta del JSONL explícitamente: `/logex <path.jsonl>`.
+**Transcripts admitidos.** El parser lee tanto JSONL de Claude Code como de Codex. El autodescubrimiento (`logex list`) escanea `~/.claude/projects/` y `~/.codex/sessions/`; también puedes pasar cualquier ruta JSONL directamente: `/logex <path.jsonl>`.
 
 ### Integración Claude Code (plugin + skill + hook)
 

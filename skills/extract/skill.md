@@ -17,6 +17,11 @@ Turn coding-agent session transcripts (Claude Code, Codex) into blog-quality tec
 /logex --list             # list recent sessions available
 ```
 
+Outside Claude Code (Codex, Cursor, any MCP client): the same procedure is
+driven by the CLI — `logex prepare <jsonl>` replaces step 2, and
+`logex publish prepare-match|execute` replaces step 7. The `logex_write` MCP
+tool returns this workflow as JSON.
+
 ## Procedure
 
 ### 1. Find the session JSONL
@@ -34,8 +39,7 @@ Auto-discovery only covers Claude Code sessions (`~/.claude/projects/`). The par
 ### 2. Run the prepare script
 
 ```bash
-cd /Users/touchskyer/Code/logex-projects/logex
-npx tsx src/pipeline/prepare.ts "<JSONL_PATH>" --mode article 2>/dev/null
+npx @touchskyer/logex prepare "<JSONL_PATH>" --mode article 2>/dev/null
 ```
 
 Outputs JSON to stdout:
@@ -164,8 +168,7 @@ Save all articles from step 6 as a JSON array to `$ARTICLES_JSON`. Each article 
 #### Step 7a: Check for existing articles (idempotency)
 
 ```bash
-cd /Users/touchskyer/Code/logex-projects/logex
-npx tsx src/pipeline/publish.ts prepare-match \
+npx @touchskyer/logex publish prepare-match \
   --session-id "<SESSION_ID>" \
   --articles "$ARTICLES_JSON"
 ```
@@ -184,8 +187,7 @@ Save to `$DECISIONS_JSON`.
 #### Step 7c: Execute publish
 
 ```bash
-cd /Users/touchskyer/Code/logex-projects/logex
-npx tsx src/pipeline/publish.ts execute \
+npx @touchskyer/logex publish execute \
   --session-id "<SESSION_ID>" \
   --articles "$ARTICLES_JSON" \
   --decisions "$DECISIONS_JSON"
@@ -212,7 +214,7 @@ Show summary table (columns: primary title · words per language · project):
 ```
 
 Ask user:
-- Deploy webapp? `cd /Users/touchskyer/Code/logex-projects/logex && git push && npx vercel --prod`
+- No webapp deploy needed for new articles — the site reads `logex-data` from GitHub at runtime, so published articles are live immediately. Only the repo owner deploys webapp code changes.
 
 ## Notes
 
