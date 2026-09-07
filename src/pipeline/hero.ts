@@ -15,7 +15,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdtempSync } from 'node:fs'
 import { spawn } from 'node:child_process'
-import { GRADIENTS, DEFAULT_GRADIENT } from '../lib/gradients'
+import { GRADIENTS, DEFAULT_GRADIENT } from '../lib/gradients.js'
 
 export interface HeroImage {
   data: Buffer

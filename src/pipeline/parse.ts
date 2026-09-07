@@ -1,5 +1,5 @@
 import { readFileSync } from 'fs'
-import type { JournalEntry, ContentBlock, Message } from './types'
+import type { JournalEntry, ContentBlock, Message } from './types.js'
 
 interface NormalizedEntry {
   role: 'user' | 'assistant'

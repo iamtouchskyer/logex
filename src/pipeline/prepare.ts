@@ -1,38 +1,28 @@
-import { execFileSync } from 'child_process'
-import { parseJsonl, extractMessages } from './parse'
-import { chunkByConversation, scoreChunk, filterChunks } from './chunk'
-import { buildExtractionPrompt } from './prompt'
-import { buildChunkSummaries, buildSegmentationPrompt } from './segment'
+import { parseJsonl, extractMessages } from './parse.js'
+import { chunkByConversation, scoreChunk, filterChunks } from './chunk.js'
+import { buildExtractionPrompt } from './prompt.js'
+import { buildChunkSummaries, buildSegmentationPrompt } from './segment.js'
+import { extractRichStats } from './stats.js'
 
-const STATS_SCRIPT = `${process.env.HOME}/.claude/skills/session-recap/scripts/extract-session-stats.py`
+export type Mode = 'article' | 'cards'
 
-function extractRichStats(jsonlPath: string): Record<string, unknown> | null {
-  try {
-    const out = execFileSync('python3', [STATS_SCRIPT, '--jsonl', jsonlPath], {
-      encoding: 'utf-8',
-      timeout: 30000,
-    })
-    return JSON.parse(out)
-  } catch {
-    console.error('Warning: session-recap stats extraction failed, continuing without rich stats')
-    return null
-  }
+export interface PrepareIO {
+  argv: string[]
+  stderr: (s: string) => void
+  stdout: (s: string) => void
+  exit: (code: number) => never
 }
 
-type Mode = 'article' | 'cards'
-
-function parseMode(args: string[]): { mode: Mode; rest: string[] } {
+function parseMode(args: string[], io: PrepareIO): { mode: Mode; rest: string[] } {
   const modeIdx = args.indexOf('--mode')
-  if (modeIdx !== -1 && args[modeIdx + 1]) {
-    const modeVal = args[modeIdx + 1] as Mode
-    if (modeVal !== 'article' && modeVal !== 'cards') {
-      console.error(`Invalid mode: ${modeVal}. Use "article" or "cards".`)
-      process.exit(1)
-    }
-    const rest = [...args.slice(0, modeIdx), ...args.slice(modeIdx + 2)]
-    return { mode: modeVal, rest }
+  if (modeIdx === -1 || !args[modeIdx + 1]) return { mode: 'article', rest: args }
+  const modeVal = args[modeIdx + 1] as Mode
+  if (modeVal !== 'article' && modeVal !== 'cards') {
+    io.stderr(`Invalid mode: ${modeVal}. Use "article" or "cards".\n`)
+    io.exit(1)
   }
-  return { mode: 'article', rest: args }
+  const rest = [...args.slice(0, modeIdx), ...args.slice(modeIdx + 2)]
+  return { mode: modeVal, rest }
 }
 
 /**
@@ -40,50 +30,39 @@ function parseMode(args: string[]): { mode: Mode; rest: string[] } {
  * Does NOT call any LLM API — parse, chunk, score, build summaries.
  *
  * For article mode: outputs chunk summaries + segmentation prompt.
- *   The skill (Claude in-session) reads the segmentation prompt,
- *   decides topic groups, then builds article prompts per group.
+ *   The agent (Claude Code, Codex, any MCP client) reads the segmentation
+ *   prompt, decides topic groups, then writes articles per group.
  *
  * For cards mode: outputs a single extraction prompt (unchanged).
- *
- * Usage:
- *   npx tsx src/pipeline/prepare.ts <session.jsonl> [--mode article|cards]
  */
-function main() {
-  const args = process.argv.slice(2)
-  const { mode, rest } = parseMode(args)
-
-  if (rest.length === 0) {
-    console.error('Usage: npx tsx src/pipeline/prepare.ts <session.jsonl> [--mode article|cards]')
-    process.exit(1)
-  }
-
-  const jsonlPath = rest[0]
-
+function prepareSession(jsonlPath: string, mode: Mode, io: PrepareIO): void {
   const entries = parseJsonl(jsonlPath)
-  const sessionId = entries[0]?.sessionId ?? 'unknown'
-  console.error(`Session: ${sessionId}`)
-  console.error(`Entries: ${entries.length}`)
-  console.error(`Mode: ${mode}`)
+  // Claude Code carries sessionId top-level; Codex rollouts carry it in the
+  // session_meta payload (payload.session_id).
+  const sessionId = entries[0]?.sessionId ?? entries[0]?.payload?.session_id ?? 'unknown'
+  io.stderr(`Session: ${sessionId}\n`)
+  io.stderr(`Entries: ${entries.length}\n`)
+  io.stderr(`Mode: ${mode}\n`)
 
   const messages = extractMessages(entries)
-  console.error(`Messages: ${messages.length}`)
+  io.stderr(`Messages: ${messages.length}\n`)
 
   const chunks = chunkByConversation(messages)
-  console.error(`Chunks: ${chunks.length}`)
+  io.stderr(`Chunks: ${chunks.length}\n`)
 
   for (const chunk of chunks) {
     chunk.insightScore = scoreChunk(chunk)
   }
 
   const filtered = filterChunks(chunks)
-  console.error(`Signal chunks: ${filtered.length} / ${chunks.length} (${Math.round((filtered.length / Math.max(chunks.length, 1)) * 100)}%)`)
+  const pct = Math.round((filtered.length / Math.max(chunks.length, 1)) * 100)
+  io.stderr(`Signal chunks: ${filtered.length} / ${chunks.length} (${pct}%)\n`)
 
-  // Extract rich stats
-  console.error('Extracting rich stats...')
   const richStats = extractRichStats(jsonlPath)
   if (richStats) {
     const rs = richStats as Record<string, Record<string, unknown>>
-    console.error(`  Tokens: ${(rs.tokens?.total as number)?.toLocaleString() ?? '?'} | Cost: $${rs.cost_estimate?.total_cost ?? '?'} | Tools: ${rs.tool_calls?.total ?? '?'}`)
+    const tokens = (rs.tokens?.total as number)?.toLocaleString() ?? '?'
+    io.stderr(`  Tokens: ${tokens} | Cost: $${rs.cost_estimate?.total_cost ?? '?'} | Tools: ${rs.tool_calls?.total ?? '?'}\n`)
   }
 
   const meta = {
@@ -97,38 +76,69 @@ function main() {
   }
 
   if (filtered.length === 0) {
-    console.error('No signal chunks found.')
-    console.log(JSON.stringify({ sessionId, mode, prompt: null, chunkSummaries: [], segmentationPrompt: null, meta }))
-    process.exit(0)
+    io.stderr('No signal chunks found.\n')
+    io.stdout(JSON.stringify({ sessionId, mode, prompt: null, chunkSummaries: [], segmentationPrompt: null, meta }) + '\n')
+    io.exit(0)
   }
 
-  // Cards mode: single prompt (unchanged)
   if (mode === 'cards') {
     const prompt = buildExtractionPrompt(filtered, sessionId)
-    console.error(`Prompt: ${prompt.length} chars (~${Math.round(prompt.length / 4)} tokens)`)
-    console.log(JSON.stringify({ sessionId, mode, prompt, chunkSummaries: [], segmentationPrompt: null, meta }))
+    io.stderr(`Prompt: ${prompt.length} chars (~${Math.round(prompt.length / 4)} tokens)\n`)
+    io.stdout(JSON.stringify({ sessionId, mode, prompt, chunkSummaries: [], segmentationPrompt: null, meta }) + '\n')
     return
   }
 
-  // Article mode: output chunk summaries + segmentation prompt for LLM
-  // Pass ALL chunks (not just filtered) so the LLM sees full context.
-  // Scores are already set from the scoring loop above. The segmentation
-  // prompt tells the LLM "score < 0.25 可以跳过", so low-score chunks
-  // are visible but flagged.
+  // Article mode: pass ALL chunks so the LLM sees full context. The
+  // segmentation prompt tells it "score < 0.25 可以跳过", so low-score
+  // chunks are visible but flagged.
   const summaries = buildChunkSummaries(chunks)
   const segPrompt = buildSegmentationPrompt(summaries)
-
-  console.error(`Chunk summaries: ${summaries.length}`)
-  console.error(`Segmentation prompt: ${segPrompt.length} chars`)
-
-  console.log(JSON.stringify({
+  io.stderr(`Chunk summaries: ${summaries.length}\n`)
+  io.stderr(`Segmentation prompt: ${segPrompt.length} chars\n`)
+  io.stdout(JSON.stringify({
     sessionId,
     mode,
     prompt: null,
     chunkSummaries: summaries,
     segmentationPrompt: segPrompt,
     meta,
-  }))
+  }) + '\n')
 }
 
-main()
+/**
+ * Pure CLI tail with injected IO so it is unit-testable.
+ * Usage: logex prepare <session.jsonl> [--mode article|cards]
+ */
+export function runPrepare(io: PrepareIO): void {
+  const { mode, rest } = parseMode(io.argv, io)
+  if (rest.length === 0) {
+    io.stderr('Usage: logex prepare <session.jsonl> [--mode article|cards]\n')
+    io.exit(1)
+  }
+  prepareSession(rest[0], mode, io)
+}
+
+export async function main(): Promise<void> {
+  runPrepare({
+    argv: process.argv.slice(2),
+    stderr: (s) => { process.stderr.write(s) },
+    stdout: (s) => { process.stdout.write(s) },
+    exit: (code) => process.exit(code),
+  })
+}
+
+/* v8 ignore start -- module bootstrap; exercised only when run as CLI */
+const isMain = (() => {
+  try {
+    const argv1 = process.argv[1]
+    if (!argv1) return false
+    return argv1.endsWith('prepare.ts') || argv1.endsWith('prepare.js')
+  } catch {
+    return false
+  }
+})()
+
+if (isMain) {
+  main()
+}
+/* v8 ignore stop */

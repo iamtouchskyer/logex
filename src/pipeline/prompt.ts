@@ -1,4 +1,4 @@
-import type { Chunk, Lang, SessionArticle, TopicSegment } from './types'
+import type { Chunk, Lang, SessionArticle, TopicSegment } from './types.js'
 
 interface ArticlePromptOptions {
   segment?: TopicSegment

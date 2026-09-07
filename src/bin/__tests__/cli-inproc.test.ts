@@ -42,14 +42,41 @@ describe("logex bin (in-process)", () => {
     await new Promise((r) => setImmediate(r));
     const out = writeSpy.mock.calls.map((c) => String(c[0])).join("");
     // The handler ALWAYS writes at least one line:
-    //  - "No sessions found under ~/.claude/projects/\n" when empty
+    //  - "No sessions found under ~/.claude/projects/ or ~/.codex/sessions/\n" when empty
     //  - one "<ISO-timestamp>  <project>  <path>\n" per entry otherwise
     expect(out.length).toBeGreaterThan(0);
-    const isEmpty = /No sessions found under ~\/\.claude\/projects\//.test(out);
+    const isEmpty = /No sessions found under ~\/\.claude\/projects\/ or ~\/\.codex\/sessions\//.test(out);
     // ISO 8601 timestamp at start of a line followed by two-space separators
     const hasEntry =
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z {2}\S+ {2}\S+/m.test(out);
     expect(isEmpty || hasEntry).toBe(true);
+  });
+
+  it("prepare without a jsonl argument errors and exits 1", async () => {
+    setupArgv(["prepare"]);
+    const errSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    const exitSpy = vi
+      .spyOn(process, "exit")
+      .mockImplementation((() => undefined) as never);
+    await import(BIN);
+    await new Promise((r) => setImmediate(r));
+    const stderr = errSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(stderr).toMatch(/missing required argument/i);
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  it("publish prepare-match without options errors and exits 1", async () => {
+    setupArgv(["publish", "prepare-match"]);
+    const errSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    const exitSpy = vi
+      .spyOn(process, "exit")
+      .mockImplementation((() => undefined) as never);
+    await import(BIN);
+    await new Promise((r) => setImmediate(r));
+    const stderr = errSpy.mock.calls.map((c) => String(c[0])).join("");
+    expect(stderr).toMatch(/required option/i);
+    expect(stderr).toMatch(/--session-id/);
+    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it("--help exits 0 and mentions all subcommands", async () => {

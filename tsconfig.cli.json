@@ -23,6 +23,8 @@
   "include": [
     "src/bin/**/*.ts",
     "src/mcp/**/*.ts",
+    "src/pipeline/prepare.ts",
+    "src/pipeline/publish.ts",
     "src/pipeline/types.ts",
     "src/lib/sessions.ts",
     "src/index.ts"

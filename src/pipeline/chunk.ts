@@ -1,4 +1,4 @@
-import type { Message, Chunk } from './types'
+import type { Message, Chunk } from './types.js'
 
 const SIGNAL_CATEGORIES: Record<string, string[]> = {
   debugging: ['bug', 'error', 'fix', 'debug', 'root cause', 'traceback', 'broken', '问题', '修复'],

@@ -1,7 +1,7 @@
 export interface JournalEntry {
   type: 'user' | 'assistant' | string
   message?: { role?: string; content: string | ContentBlock[] }
-  payload?: { type?: string; role?: string; content?: string | ContentBlock[] }
+  payload?: { type?: string; role?: string; content?: string | ContentBlock[]; session_id?: string }
   timestamp: string
   sessionId: string
   uuid?: string

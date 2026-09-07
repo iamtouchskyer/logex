@@ -1,4 +1,4 @@
-import type { Chunk, TopicSegment } from './types'
+import type { Chunk, TopicSegment } from './types.js'
 
 /**
  * Extract project name from user messages in a chunk.
