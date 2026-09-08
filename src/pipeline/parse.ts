@@ -14,8 +14,8 @@ interface NormalizedEntry {
  * Supports zstd-compressed transcripts (`.zst` / `.zstd`) when the `zstd`
  * binary is available.
  */
-export function parseJsonl(filepath: string): JournalEntry[] {
-  const raw = readRaw(filepath)
+export function parseJsonl(filepath: string, exec: typeof execFileSync = execFileSync): JournalEntry[] {
+  const raw = readRaw(filepath, exec)
   const entries: JournalEntry[] = []
   let skipped = 0
 
@@ -36,16 +36,21 @@ export function parseJsonl(filepath: string): JournalEntry[] {
   return entries
 }
 
-function readRaw(filepath: string): string {
+function readRaw(filepath: string, exec: typeof execFileSync): string {
   if (!/\.(zst|zstd)$/i.test(filepath)) return readFileSync(filepath, 'utf-8')
   try {
-    return execFileSync('zstd', ['-dc', filepath], { maxBuffer: 1024 * 1024 * 1024 })
+    return exec('zstd', ['-dc', filepath], { maxBuffer: 1024 * 1024 * 1024 })
       .toString('utf-8')
-  } catch {
-    throw new Error(
-      `${filepath} is zstd-compressed but the \`zstd\` binary is unavailable. ` +
-      'Install zstd (e.g. `brew install zstd`) or decompress first: `zstd -dc file.zst > file.jsonl`.',
-    )
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new Error(
+        `${filepath} is zstd-compressed but the \`zstd\` binary is unavailable. ` +
+        'Install zstd (e.g. `brew install zstd`) or decompress first: `zstd -dc file.zst > file.jsonl`.',
+      )
+    }
+    // zstd ran but failed — surface its own diagnosis instead of blaming the binary.
+    const detail = (e as { stderr?: Buffer }).stderr?.toString().trim().split('\n').slice(-2).join('; ')
+    throw new Error(`Failed to decompress ${filepath}: ${detail || 'zstd reported an error'}`)
   }
 }
 

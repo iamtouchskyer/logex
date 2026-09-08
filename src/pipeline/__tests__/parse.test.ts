@@ -347,4 +347,20 @@ describe('extractMessages', () => {
     unlinkSync(plain)
     unlinkSync(packed)
   })
+
+  it('reports the install hint only when the zstd binary is missing', () => {
+    const packed = join(tmpdir(), 'nonexistent-transcript.jsonl.zst')
+    const missingBinary = () => {
+      throw Object.assign(new Error('spawn zstd ENOENT'), { code: 'ENOENT' })
+    }
+    expect(() => parseJsonl(packed, missingBinary)).toThrow(/zstd` binary is unavailable/)
+  })
+
+  it('surfaces the zstd diagnosis when decompression fails', () => {
+    const packed = join(tmpdir(), 'corrupt-transcript.jsonl.zst')
+    const brokenZstd = () => {
+      throw Object.assign(new Error('command failed'), { stderr: Buffer.from('corrupt.zst : Read error (39) : premature end') })
+    }
+    expect(() => parseJsonl(packed, brokenZstd)).toThrow(/Failed to decompress.*premature end/)
+  })
 })
