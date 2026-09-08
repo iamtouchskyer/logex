@@ -2,7 +2,7 @@
 
 ## What Is This
 
-logex turns coding-agent session JSONL transcripts (Claude Code, Codex, Pi) into blog-quality technical articles. It's a thin pipeline (parse → chunk → score → group) plus a React/Vite SPA that reads articles from a separate public data repo (`logex-data`). Distributed as an npm package (`@touchskyer/logex`) + Claude Code plugin + MCP server for other agents. The LLM already in the session does the topic segmentation and the writing — logex is scaffolding, not an LLM gateway.
+logex turns coding-agent session JSONL transcripts (Claude Code, Codex, Pi, DSH) into blog-quality technical articles. It's a thin pipeline (parse → chunk → score → group) plus a React/Vite SPA that reads articles from a separate public data repo (`logex-data`). Distributed as an npm package (`@touchskyer/logex`) + Claude Code plugin + MCP server for other agents. The LLM already in the session does the topic segmentation and the writing — logex is scaffolding, not an LLM gateway.
 
 ## Repo Layout
 

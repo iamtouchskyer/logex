@@ -34,7 +34,7 @@ ls -t "$SESSION_DIR"/*.jsonl | head -5
 
 Pick the most recent (or current) session. If `--list`, show 10 most recent across all projects.
 
-Auto-discovery (`logex list`) covers Claude Code (`~/.claude/projects/`), Codex (`~/.codex/sessions/`), and Pi (`~/.pi/agent/sessions/`). For any of them you can also skip discovery and pass the path directly to the prepare script in step 2.
+Auto-discovery (`logex list`) covers Claude Code (`~/.claude/projects/`), Codex (`~/.codex/sessions/`), Pi (`~/.pi/agent/sessions/`), and DSH (`~/.dsh/sessions/`, zstd-compressed transcripts are decompressed transparently — needs the `zstd` binary). For any of them you can also skip discovery and pass the path directly to the prepare script in step 2.
 
 ### 2. Run the prepare script
 

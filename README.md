@@ -1,6 +1,6 @@
 # logex
 
-Write blog-style session papers from coding-agent session transcripts (Claude Code, Codex, Pi). One session → N articles, one per topic. The LLM (your agent) decides topic segmentation and writes the articles in-session — no extra API key needed.
+Write blog-style session papers from coding-agent session transcripts (Claude Code, Codex, Pi, DSH). One session → N articles, one per topic. The LLM (your agent) decides topic segmentation and writes the articles in-session — no extra API key needed.
 
 - [English](#english) · [中文](#中文) · [日本語](#日本語) · [한국어](#한국어) · [Español](#español)
 
@@ -10,7 +10,7 @@ Write blog-style session papers from coding-agent session transcripts (Claude Co
 
 ### What is logex
 
-`logex` turns coding-agent session JSONL transcripts (Claude Code, Codex, Pi) into blog-quality technical articles. It does the boring work (parse, chunk, score, group by signal) as a pure pipeline, then hands the actual **topic segmentation** and **writing** to the LLM that's already in the loop. One long session typically yields 1–3 articles — the agent reads chunk summaries, decides what's worth writing, and produces structured JSON articles that get published to a separate data repo (`logex-data`).
+`logex` turns coding-agent session JSONL transcripts (Claude Code, Codex, Pi, DSH) into blog-quality technical articles. It does the boring work (parse, chunk, score, group by signal) as a pure pipeline, then hands the actual **topic segmentation** and **writing** to the LLM that's already in the loop. One long session typically yields 1–3 articles — the agent reads chunk summaries, decides what's worth writing, and produces structured JSON articles that get published to a separate data repo (`logex-data`).
 
 The webapp (React + Vite SPA) reads that data repo and renders the blog at [logex-io.vercel.app](https://logex-io.vercel.app).
 
@@ -36,7 +36,7 @@ Under the hood the skill runs:
 
 ```bash
 logex write                # /logex entry point — points at the workflow below
-logex list                 # recent sessions (Claude Code + Codex + Pi)
+logex list                 # recent sessions (Claude Code + Codex + Pi + DSH)
 logex prepare <jsonl>      # parse → chunk → score → segmentation prompt (no LLM)
 logex publish ...          # publish articles to the logex-data repo
 logex mcp                  # start MCP server for other agents
@@ -44,7 +44,7 @@ logex mcp                  # start MCP server for other agents
 
 The agent is the one deciding topic boundaries and drafting the prose — `logex` is the scaffolding around it.
 
-**Supported transcripts.** The parser reads Claude Code, Codex, Pi, and DSH (DeepSeek Harness) session JSONL. Auto-discovery (`logex list`) scans `~/.claude/projects/`, `~/.codex/sessions/`, and `~/.pi/agent/sessions/`; DSH sessions live under `~/.dsh/sessions/<project>/session-*/session.jsonl.zstd` and are decompressed transparently when the `zstd` binary is available; you can also pass any JSONL path directly: `/logex <path.jsonl>`.
+**Supported transcripts.** The parser reads Claude Code, Codex, Pi, and DSH (DeepSeek Harness) session JSONL. Auto-discovery (`logex list`) scans `~/.claude/projects/`, `~/.codex/sessions/`, `~/.pi/agent/sessions/`, and `~/.dsh/sessions/`; zstd-compressed DSH transcripts (`.jsonl.zstd`) are decompressed transparently (needs the `zstd` binary). You can also pass any JSONL path directly: `/logex <path.jsonl>`.
 
 ### Claude Code integration (plugin + skill + hook)
 
@@ -105,7 +105,7 @@ MIT.
 
 ### 什么是 logex
 
-`logex` 把 coding agent(Claude Code、Codex、Pi)session 的 JSONL transcript 变成 blog 级的技术文章。它把"枯燥的部分"（parse、chunk、score、按信号分组）做成纯 pipeline，把**话题切分**和**写作**交给当前在 session 里的 LLM —— 不需要额外 API key。一次长 session 通常产 1–3 篇文章：agent 读 chunk summaries，自己决定哪些值得写，产出结构化的 JSON 文章，发布到独立的 data 仓库 `logex-data`。
+`logex` 把 coding agent(Claude Code、Codex、Pi、DSH)session 的 JSONL transcript 变成 blog 级的技术文章。它把"枯燥的部分"（parse、chunk、score、按信号分组）做成纯 pipeline，把**话题切分**和**写作**交给当前在 session 里的 LLM —— 不需要额外 API key。一次长 session 通常产 1–3 篇文章：agent 读 chunk summaries，自己决定哪些值得写，产出结构化的 JSON 文章，发布到独立的 data 仓库 `logex-data`。
 
 Webapp 是 React + Vite SPA，从 data 仓库读文章，部署在 [logex-io.vercel.app](https://logex-io.vercel.app)。
 
@@ -131,7 +131,7 @@ npm install -g @touchskyer/logex
 
 ```bash
 logex write                # /logex 入口 —— 指向下面的工作流命令
-logex list                 # 最近 session（Claude Code + Codex + Pi）
+logex list                 # 最近 session（Claude Code + Codex + Pi + DSH）
 logex prepare <jsonl>      # parse → chunk → score → 切分 prompt（无 LLM）
 logex publish ...          # 发布文章到 logex-data 仓库
 logex mcp                  # 给其它 agent 暴露 MCP server
@@ -139,7 +139,7 @@ logex mcp                  # 给其它 agent 暴露 MCP server
 
 话题切分和正文都是 agent 自己决定，`logex` 只做周边脚手架。
 
-**支持的 transcript 格式。** parser 同时认 Claude Code、Codex 和 Pi 的 session JSONL。自动发现（`logex list`）同时扫描 `~/.claude/projects/`、`~/.codex/sessions/` 和 `~/.pi/agent/sessions/`；也可以直接传任意 JSONL 路径：`/logex <path.jsonl>`。
+**支持的 transcript 格式。** parser 同时认 Claude Code、Codex、Pi 和 DSH（DeepSeek Harness）的 session JSONL。自动发现（`logex list`）同时扫描 `~/.claude/projects/`、`~/.codex/sessions/`、`~/.pi/agent/sessions/` 和 `~/.dsh/sessions/`；zstd 压缩的 DSH transcript（`.jsonl.zstd`）会透明解压（需要 `zstd` 二进制）。也可以直接传任意 JSONL 路径：`/logex <path.jsonl>`。
 
 ### Claude Code 集成（plugin + skill + hook）
 
@@ -200,7 +200,7 @@ MIT.
 
 ### logex とは
 
-`logex` はコーディング agent（Claude Code・Codex・Pi）のセッション JSONL トランスクリプトを、ブログ品質の技術記事に変換します。退屈な処理（parse・chunk・score・シグナル単位でのグルーピング）はピュアな pipeline で処理し、**トピック分割**と**執筆**は、セッション内にすでにいる LLM に任せます — 追加の API key は不要。長めのセッション 1 回で通常 1〜3 本の記事が出ます。agent が chunk summaries を読み、書く価値のある話題を判断し、構造化された JSON 記事を別 repo (`logex-data`) に publish します。
+`logex` はコーディング agent（Claude Code・Codex・Pi・DSH）のセッション JSONL トランスクリプトを、ブログ品質の技術記事に変換します。退屈な処理（parse・chunk・score・シグナル単位でのグルーピング）はピュアな pipeline で処理し、**トピック分割**と**執筆**は、セッション内にすでにいる LLM に任せます — 追加の API key は不要。長めのセッション 1 回で通常 1〜3 本の記事が出ます。agent が chunk summaries を読み、書く価値のある話題を判断し、構造化された JSON 記事を別 repo (`logex-data`) に publish します。
 
 Webapp は React + Vite SPA で、その data repo を読んで [logex-io.vercel.app](https://logex-io.vercel.app) に表示されます。
 
@@ -226,13 +226,13 @@ Claude Code 内で:
 
 ```bash
 logex write                # /logex エントリポイント —— 下記ワークフローへの導線
-logex list                 # 最近のセッション（Claude Code + Codex + Pi）
+logex list                 # 最近のセッション（Claude Code + Codex + Pi + DSH）
 logex prepare <jsonl>      # parse → chunk → score → 分割プロンプト（LLM 不要）
 logex publish ...          # 記事を logex-data リポジトリへ publish
 logex mcp                  # 他 agent 向け MCP server
 ```
 
-**対応トランスクリプト。** parser は Claude Code・Codex・Pi のセッション JSONL を読めます。自動検出（`logex list`）は `~/.claude/projects/`・`~/.codex/sessions/`・`~/.pi/agent/sessions/` を走査します。任意の JSONL パスを直接指定することもできます：`/logex <path.jsonl>`。
+**対応トランスクリプト。** parser は Claude Code・Codex・Pi・DSH のセッション JSONL を読めます。自動検出（`logex list`）は `~/.claude/projects/`・`~/.codex/sessions/`・`~/.pi/agent/sessions/`・`~/.dsh/sessions/` を走査します。zstd 圧縮された DSH transcript（`.jsonl.zstd`）は透過的に解凍されます（`zstd` バイナリが必要）。任意の JSONL パスを直接指定することもできます：`/logex <path.jsonl>`。
 
 ### Claude Code 連携 (plugin + skill + hook)
 
@@ -285,7 +285,7 @@ MIT.
 
 ### logex 란
 
-`logex` 는 코딩 agent(Claude Code, Codex, Pi) 세션의 JSONL 트랜스크립트를 블로그 품질의 기술 기사로 바꿉니다. 지루한 작업(parse, chunk, score, 시그널별 그룹핑)은 순수 pipeline 으로 처리하고, **토픽 분할**과 **작성**은 이미 세션 안에 있는 LLM 에게 맡깁니다 — 별도 API key 불필요. 긴 세션 하나로 보통 1〜3 개의 기사가 나옵니다. agent 가 chunk summary 를 읽고 쓸 가치가 있는 것을 고른 뒤, 구조화된 JSON 기사를 별도 data repo (`logex-data`) 로 publish 합니다.
+`logex` 는 코딩 agent(Claude Code, Codex, Pi, DSH) 세션의 JSONL 트랜스크립트를 블로그 품질의 기술 기사로 바꿉니다. 지루한 작업(parse, chunk, score, 시그널별 그룹핑)은 순수 pipeline 으로 처리하고, **토픽 분할**과 **작성**은 이미 세션 안에 있는 LLM 에게 맡깁니다 — 별도 API key 불필요. 긴 세션 하나로 보통 1〜3 개의 기사가 나옵니다. agent 가 chunk summary 를 읽고 쓸 가치가 있는 것을 고른 뒤, 구조화된 JSON 기사를 별도 data repo (`logex-data`) 로 publish 합니다.
 
 Webapp 은 React + Vite SPA 로, data repo 를 읽어 [logex-io.vercel.app](https://logex-io.vercel.app) 에서 렌더링됩니다.
 
@@ -311,13 +311,13 @@ Claude Code 에서:
 
 ```bash
 logex write                # /logex 진입점 —— 아래 워크플로 명령 안내
-logex list                 # 최근 세션 (Claude Code + Codex + Pi)
+logex list                 # 최근 세션 (Claude Code + Codex + Pi + DSH)
 logex prepare <jsonl>      # parse → chunk → score → 분할 프롬프트 (LLM 불필요)
 logex publish ...          # logex-data 저장소에 기사 publish
 logex mcp                  # 다른 agent 를 위한 MCP server
 ```
 
-**지원 트랜스크립트.** parser 는 Claude Code 와 Codex, Pi 세션 JSONL 을 모두 읽습니다. 자동 탐색(`logex list`)은 `~/.claude/projects/` 와 `~/.codex/sessions/`, `~/.pi/agent/sessions/` 를 모두 스캔합니다. 임의의 JSONL 경로를 직접 지정할 수도 있습니다: `/logex <path.jsonl>`.
+**지원 트랜스크립트.** parser 는 Claude Code 와 Codex, Pi, DSH 세션 JSONL 을 모두 읽습니다. 자동 탐색(`logex list`)은 `~/.claude/projects/` 와 `~/.codex/sessions/`, `~/.pi/agent/sessions/`, `~/.dsh/sessions/` 를 모두 스캔합니다. zstd 로 압축된 DSH 트랜스크립트(`.jsonl.zstd`)는 투명하게 압축 해제됩니다(`zstd` 바이너리 필요). 임의의 JSONL 경로를 직접 지정할 수도 있습니다: `/logex <path.jsonl>`.
 
 ### Claude Code 통합 (plugin + skill + hook)
 
@@ -368,7 +368,7 @@ MIT.
 
 ### Qué es logex
 
-`logex` convierte los transcripts JSONL de sesiones de agentes de código (Claude Code, Codex, Pi) en artículos técnicos con calidad de blog. La parte aburrida (parse, chunk, score, agrupación por señal) vive en un pipeline puro; la **segmentación por tema** y la **redacción** las hace el LLM que ya está en la sesión — sin API key adicional. Una sesión larga típicamente produce 1–3 artículos: el agent lee los resúmenes de chunk, decide qué vale la pena escribir y publica artículos JSON estructurados en un repo de datos aparte (`logex-data`).
+`logex` convierte los transcripts JSONL de sesiones de agentes de código (Claude Code, Codex, Pi, DSH) en artículos técnicos con calidad de blog. La parte aburrida (parse, chunk, score, agrupación por señal) vive en un pipeline puro; la **segmentación por tema** y la **redacción** las hace el LLM que ya está en la sesión — sin API key adicional. Una sesión larga típicamente produce 1–3 artículos: el agent lee los resúmenes de chunk, decide qué vale la pena escribir y publica artículos JSON estructurados en un repo de datos aparte (`logex-data`).
 
 La webapp es una SPA React + Vite que lee ese repo y se despliega en [logex-io.vercel.app](https://logex-io.vercel.app).
 
@@ -394,13 +394,13 @@ Comandos subyacentes:
 
 ```bash
 logex write                # punto de entrada de /logex — apunta al flujo de abajo
-logex list                 # sesiones recientes (Claude Code + Codex + Pi)
+logex list                 # sesiones recientes (Claude Code + Codex + Pi + DSH)
 logex prepare <jsonl>      # parse → chunk → score → prompt de segmentación (sin LLM)
 logex publish ...          # publica artículos en el repo logex-data
 logex mcp                  # servidor MCP para otros agentes
 ```
 
-**Transcripts admitidos.** El parser lee JSONL de Claude Code, Codex y Pi. El autodescubrimiento (`logex list`) escanea `~/.claude/projects/`, `~/.codex/sessions/` y `~/.pi/agent/sessions/`; también puedes pasar cualquier ruta JSONL directamente: `/logex <path.jsonl>`.
+**Transcripts admitidos.** El parser lee JSONL de Claude Code, Codex, Pi y DSH. El autodescubrimiento (`logex list`) escanea `~/.claude/projects/`, `~/.codex/sessions/`, `~/.pi/agent/sessions/` y `~/.dsh/sessions/`; los transcripts DSH comprimidos con zstd (`.jsonl.zstd`) se descomprimen de forma transparente (requiere el binario `zstd`). También puedes pasar cualquier ruta JSONL directamente: `/logex <path.jsonl>`.
 
 ### Integración Claude Code (plugin + skill + hook)
 

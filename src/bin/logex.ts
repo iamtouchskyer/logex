@@ -37,7 +37,7 @@ const program = new Command();
 program
   .name("logex")
   .description(
-    "Write blog-style session papers from coding-agent session transcripts (Claude Code, Codex, Pi)",
+    "Write blog-style session papers from coding-agent session transcripts (Claude Code, Codex, Pi, DSH)",
   )
   .version(pkg.version);
 
@@ -57,7 +57,7 @@ program
 
 program
   .command("list")
-  .description("List the 10 most recent session JSONLs (Claude Code + Codex + Pi)")
+  .description("List the 10 most recent session JSONLs (Claude Code + Codex + Pi + DSH)")
   .action(() => {
     const entries = listAllSessions(10);
     if (entries.length === 0) {

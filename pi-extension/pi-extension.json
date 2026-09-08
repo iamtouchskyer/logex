@@ -1,7 +1,7 @@
 {
   "name": "logex-pi",
   "version": "0.2.0",
-  "description": "Pi extension for Logex — write blog-style articles from coding-agent sessions (Claude Code, Codex, Pi)",
+  "description": "Pi extension for Logex — write blog-style articles from coding-agent sessions (Claude Code, Codex, Pi, DSH)",
   "entry": "./index.ts",
   "capabilities": {
     "tools": ["logex_write"],

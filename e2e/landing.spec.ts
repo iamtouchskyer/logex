@@ -93,7 +93,7 @@ test('landing subtitle renders the supported-transcript list', async ({ page }, 
   await page.waitForLoadState('networkidle')
 
   // Copy contract: the subtitle must track the parser's supported formats.
-  await expect(page.locator('.landing__subtitle')).toContainText('Claude Code, Codex, Pi')
+  await expect(page.locator('.landing__subtitle')).toContainText('Claude Code, Codex, Pi, DSH')
   await page.screenshot({ path: 'e2e/artifacts/landing-subtitle.png', fullPage: false })
   await testInfo.attach('landing-subtitle', { path: 'e2e/artifacts/landing-subtitle.png', contentType: 'image/png' })
 })

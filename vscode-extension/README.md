@@ -2,7 +2,7 @@
 
 Drive the logex workflow from the command palette. The extension registers **Logex: Prepare Session for Article**:
 
-1. Lists recent sessions from `logex list` (Claude Code + Codex + Pi).
+1. Lists recent sessions from `logex list` (Claude Code + Codex + Pi + DSH).
 2. Lets you pick one via QuickPick.
 3. Runs `logex prepare <jsonl>` and opens the JSON output (chunk summaries + segmentation prompt) in an editor tab.
 

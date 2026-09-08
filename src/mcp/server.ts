@@ -54,7 +54,7 @@ export function createLogexServer(): McpServer {
     "logex_list",
     {
       description:
-        "List the most recent session JSONLs across Claude Code (~/.claude/projects), Codex (~/.codex/sessions), and Pi (~/.pi/agent/sessions), top 10 by mtime",
+        "List the most recent session JSONLs across Claude Code (~/.claude/projects), Codex (~/.codex/sessions), Pi (~/.pi/agent/sessions), and DSH (~/.dsh/sessions, zstd-compressed), top 10 by mtime",
       inputSchema: {},
     },
     async () => {
