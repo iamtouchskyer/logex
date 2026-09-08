@@ -18,14 +18,18 @@ interface LogexRun {
 
 const MAX_BUFFER = 64 * 1024 * 1024
 
+// npm installs .cmd shims on Windows — spawning the bare name fails there.
+const LOGEX_BIN = process.platform === 'win32' ? 'logex.cmd' : 'logex'
+const NPX_BIN = process.platform === 'win32' ? 'npx.cmd' : 'npx'
+
 function runLogex(args: string[]): LogexRun {
-  const direct = spawnSync('logex', args, { encoding: 'utf-8', maxBuffer: MAX_BUFFER })
+  const direct = spawnSync(LOGEX_BIN, args, { encoding: 'utf-8', maxBuffer: MAX_BUFFER })
   if (!direct.error) {
     return { ok: direct.status === 0, stdout: direct.stdout ?? '', stderr: direct.stderr ?? '' }
   }
   // logex not on PATH — fall back to the npm package runner.
   const viaNpx = spawnSync(
-    'npx',
+    NPX_BIN,
     ['--yes', '@touchskyer/logex', ...args],
     { encoding: 'utf-8', maxBuffer: MAX_BUFFER },
   )
