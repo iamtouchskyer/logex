@@ -19,7 +19,7 @@ vi.mock("node:fs", () => ({
   },
 }));
 
-import { readArticleBySlug, listRecentSessions, listRecentCodexSessions, listRecentPiSessions, listAllSessions } from "../sessions";
+import { readArticleBySlug, listRecentSessions, listRecentCodexSessions, listRecentPiSessions, listRecentDshSessions, listAllSessions } from "../sessions";
 
 const projectsDir = join(homedir(), ".claude", "projects");
 const codexDir = join(homedir(), ".codex", "sessions");
@@ -325,6 +325,63 @@ describe("listRecentPiSessions", () => {
     const out = listRecentPiSessions();
     expect(out).toHaveLength(1);
     expect(out[0].source).toBe("pi");
+  });
+});
+
+describe("listRecentDshSessions", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it("returns [] when the dsh root cannot be read", () => {
+    fsMocks.readdirSync.mockImplementation(() => {
+      throw new Error("missing dir");
+    });
+    expect(listRecentDshSessions()).toEqual([]);
+  });
+
+  it("enumerates session transcripts newest first, stripping edge dashes", () => {
+    fsMocks.readdirSync.mockImplementation((p: unknown) => {
+      const s = String(p);
+      if (s === piDir) return ["unused"];
+      if (s === join(homedir(), ".dsh", "sessions")) return ["--Users-touchskyer-Code-logex--"];
+      if (s === join(homedir(), ".dsh", "sessions", "--Users-touchskyer-Code-logex--")) return ["session-abc", "loose.txt"];
+      return [];
+    });
+    fsMocks.statSync.mockImplementation((p: unknown) => {
+      const s = String(p);
+      if (s.endsWith("--Users-touchskyer-Code-logex--") || s.endsWith("session-abc")) {
+        return { isDirectory: () => true } as unknown as ReturnType<typeof fsMocks.statSync>;
+      }
+      if (s.endsWith("session.jsonl.zstd")) return { mtimeMs: 42 } as never;
+      throw new Error("unexpected stat: " + s);
+    });
+    const out = listRecentDshSessions(10);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({
+      project: "Users-touchskyer-Code-logex",
+      source: "dsh",
+      mtime: 42,
+    });
+    expect(out[0].path.endsWith("session.jsonl.zstd")).toBe(true);
+  });
+
+  it("prefers the plain jsonl when only that exists", () => {
+    fsMocks.readdirSync.mockImplementation((p: unknown) => {
+      const s = String(p);
+      if (s === join(homedir(), ".dsh", "sessions")) return ["d"];
+      if (s === join(homedir(), ".dsh", "sessions", "d")) return ["s1"];
+      return [];
+    });
+    fsMocks.statSync.mockImplementation((p: unknown) => {
+      const s = String(p);
+      if (s === join(homedir(), ".dsh", "sessions", "d") || s === join(homedir(), ".dsh", "sessions", "d", "s1")) {
+        return { isDirectory: () => true } as unknown as ReturnType<typeof fsMocks.statSync>;
+      }
+      if (s === join(homedir(), ".dsh", "sessions", "d", "s1", "session.jsonl")) return { mtimeMs: 7 } as never;
+      throw new Error("unexpected stat: " + s);
+    });
+    const out = listRecentDshSessions();
+    expect(out).toHaveLength(1);
+    expect(out[0].path.endsWith("session.jsonl")).toBe(true);
   });
 });
 

@@ -11,7 +11,7 @@ export interface SessionEntry {
   path: string;
   project: string;
   mtime: number;
-  source: "claude-code" | "codex" | "pi";
+  source: "claude-code" | "codex" | "pi" | "dsh";
 }
 
 export function listRecentSessions(limit = 10): SessionEntry[] {
@@ -111,12 +111,51 @@ export function listRecentPiSessions(limit = 10): SessionEntry[] {
   return out.slice(0, limit);
 }
 
-/** Most recent sessions across all supported sources (Claude Code + Codex + Pi). */
+/**
+ * DSH sessions live at ~/.dsh/sessions/--<cwd-with-dashes>--/<session>/session.jsonl[.zstd].
+ * The transcript may be zstd-compressed; the parser decompresses transparently.
+ */
+export function listRecentDshSessions(limit = 10): SessionEntry[] {
+  const root = join(homedir(), ".dsh", "sessions");
+  const out: SessionEntry[] = [];
+  for (const dir of safeReadDir(root)) {
+    const projectDir = join(root, dir);
+    if (!isDirectory(projectDir)) continue;
+    const project = dir.replace(/^-+|-+$/g, "") || "dsh";
+    for (const sess of safeReadDir(projectDir)) {
+      const sessDir = join(projectDir, sess);
+      if (!isDirectory(sessDir)) continue;
+      for (const name of ["session.jsonl.zstd", "session.jsonl"]) {
+        const p = join(sessDir, name);
+        try {
+          const s = statSync(p);
+          out.push({ path: p, project, mtime: s.mtimeMs, source: "dsh" });
+          break;
+        } catch {
+          /* try the next candidate name */
+        }
+      }
+    }
+  }
+  out.sort((a, b) => b.mtime - a.mtime);
+  return out.slice(0, limit);
+}
+
+function isDirectory(path: string): boolean {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/** Most recent sessions across all supported sources (Claude Code + Codex + Pi + DSH). */
 export function listAllSessions(limit = 10): SessionEntry[] {
   return [
     ...listRecentSessions(limit),
     ...listRecentCodexSessions(limit),
     ...listRecentPiSessions(limit),
+    ...listRecentDshSessions(limit),
   ]
     .sort((a, b) => b.mtime - a.mtime)
     .slice(0, limit);
