@@ -1,5 +1,5 @@
 import { parseJsonl, extractMessages } from './parse.js'
-import type { JournalEntry } from './types.js'
+import type { Chunk, JournalEntry } from './types.js'
 import { chunkByConversation, scoreChunk, filterChunks } from './chunk.js'
 import { buildExtractionPrompt } from './prompt.js'
 import { buildChunkSummaries, buildSegmentationPrompt } from './segment.js'
@@ -47,19 +47,11 @@ function resolveSessionId(entries: JournalEntry[]): string {
  *
  * For cards mode: outputs a single extraction prompt (unchanged).
  */
-function prepareSession(jsonlPath: string, mode: Mode, io: PrepareIO): void {
-  const entries = parseJsonl(jsonlPath)
-  const sessionId = resolveSessionId(entries)
-  io.stderr(`Session: ${sessionId}\n`)
-  io.stderr(`Entries: ${entries.length}\n`)
-  io.stderr(`Mode: ${mode}\n`)
-
-  const messages = extractMessages(entries)
-  io.stderr(`Messages: ${messages.length}\n`)
-
-  const chunks = chunkByConversation(messages)
-  io.stderr(`Chunks: ${chunks.length}\n`)
-
+/** Score every chunk, filter to signal chunks, surface rich stats on stderr. */
+function scoreAndFilter(chunks: Chunk[], jsonlPath: string, io: PrepareIO): {
+  filtered: Chunk[]
+  richStats: unknown
+} {
   for (const chunk of chunks) {
     chunk.insightScore = scoreChunk(chunk)
   }
@@ -74,8 +66,17 @@ function prepareSession(jsonlPath: string, mode: Mode, io: PrepareIO): void {
     const tokens = (rs.tokens?.total as number)?.toLocaleString() ?? '?'
     io.stderr(`  Tokens: ${tokens} | Cost: $${rs.cost_estimate?.total_cost ?? '?'} | Tools: ${rs.tool_calls?.total ?? '?'}\n`)
   }
+  return { filtered, richStats }
+}
 
-  const meta = {
+function buildMeta(
+  entries: JournalEntry[],
+  messages: ReturnType<typeof extractMessages>,
+  chunks: Chunk[],
+  filtered: Chunk[],
+  richStats: unknown,
+) {
+  return {
     entries: entries.length,
     messages: messages.length,
     chunks: chunks.length,
@@ -84,6 +85,23 @@ function prepareSession(jsonlPath: string, mode: Mode, io: PrepareIO): void {
     endTime: messages[messages.length - 1]?.timestamp ?? '',
     richStats,
   }
+}
+
+function prepareSession(jsonlPath: string, mode: Mode, io: PrepareIO): void {
+  const entries = parseJsonl(jsonlPath)
+  const sessionId = resolveSessionId(entries)
+  io.stderr(`Session: ${sessionId}\n`)
+  io.stderr(`Entries: ${entries.length}\n`)
+  io.stderr(`Mode: ${mode}\n`)
+
+  const messages = extractMessages(entries)
+  io.stderr(`Messages: ${messages.length}\n`)
+
+  const chunks = chunkByConversation(messages)
+  io.stderr(`Chunks: ${chunks.length}\n`)
+
+  const { filtered, richStats } = scoreAndFilter(chunks, jsonlPath, io)
+  const meta = buildMeta(entries, messages, chunks, filtered, richStats)
 
   if (filtered.length === 0) {
     io.stderr('No signal chunks found.\n')
