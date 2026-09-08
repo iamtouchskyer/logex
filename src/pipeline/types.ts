@@ -4,6 +4,10 @@ export interface JournalEntry {
   // carry toolCallId/toolName/isError); the parser only reads role + content.
   message?: { role?: string; content: string | ContentBlock[]; [key: string]: unknown }
   payload?: { type?: string; role?: string; content?: string | ContentBlock[]; session_id?: string }
+  // DSH (DeepSeek Harness) sessions nest the message under `data` and carry
+  // epoch-millisecond timestamps in top-level `time`.
+  data?: { role?: string; content?: string | ContentBlock[]; message?: { role?: string; content?: string | ContentBlock[]; [key: string]: unknown }; [key: string]: unknown }
+  time?: number
   timestamp: string
   sessionId: string
   uuid?: string

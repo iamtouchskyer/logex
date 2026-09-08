@@ -1,11 +1,11 @@
 ---
 name: logex
-description: "Write bilingual (zh + en) blog-style session papers from a coding-agent session transcript (Claude Code, Codex, or Pi JSONL). One session → N articles (one per topic). LLM decides topic segmentation. No API key. Triggers: 'logex', 'extract session', 'session paper', '提取 session', 'write session article'."
+description: "Write bilingual (zh + en) blog-style session papers from a coding-agent session transcript (Claude Code, Codex, Pi, or DSH JSONL). One session → N articles (one per topic). LLM decides topic segmentation. No API key. Triggers: 'logex', 'extract session', 'session paper', '提取 session', 'write session article'."
 ---
 
 # Logex — Write Session Papers
 
-Turn coding-agent session transcripts (Claude Code, Codex, Pi) into blog-quality technical articles. A single session can produce **multiple articles** — one per topic/arc. The LLM (you) decides how many topics exist and which are worth writing about.
+Turn coding-agent session transcripts (Claude Code, Codex, Pi, DSH) into blog-quality technical articles. A single session can produce **multiple articles** — one per topic/arc. The LLM (you) decides how many topics exist and which are worth writing about.
 
 **All articles are bilingual (zh + en).** Every article ships with a `primary` language body and a `translations` map containing the other language. Never produce a monolingual article — the data repo, renderer, and publish pipeline all assume bilingual shape.
 

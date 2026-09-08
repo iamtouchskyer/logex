@@ -1,4 +1,5 @@
 import { readFileSync } from 'fs'
+import { execFileSync } from 'child_process'
 import type { JournalEntry, ContentBlock, Message } from './types.js'
 
 interface NormalizedEntry {
@@ -10,9 +11,11 @@ interface NormalizedEntry {
 /**
  * Parse a JSONL file into journal entries.
  * Skips blank lines and malformed JSON.
+ * Supports zstd-compressed transcripts (`.zst` / `.zstd`) when the `zstd`
+ * binary is available.
  */
 export function parseJsonl(filepath: string): JournalEntry[] {
-  const raw = readFileSync(filepath, 'utf-8')
+  const raw = readRaw(filepath)
   const entries: JournalEntry[] = []
   let skipped = 0
 
@@ -33,6 +36,19 @@ export function parseJsonl(filepath: string): JournalEntry[] {
   return entries
 }
 
+function readRaw(filepath: string): string {
+  if (!/\.(zst|zstd)$/i.test(filepath)) return readFileSync(filepath, 'utf-8')
+  try {
+    return execFileSync('zstd', ['-dc', filepath], { maxBuffer: 1024 * 1024 * 1024 })
+      .toString('utf-8')
+  } catch {
+    throw new Error(
+      `${filepath} is zstd-compressed but the \`zstd\` binary is unavailable. ` +
+      'Install zstd (e.g. `brew install zstd`) or decompress first: `zstd -dc file.zst > file.jsonl`.',
+    )
+  }
+}
+
 function normalizeEntry(entry: JournalEntry): NormalizedEntry | null {
   if ((entry.type === 'user' || entry.type === 'assistant') && entry.message) {
     return {
@@ -50,6 +66,22 @@ function normalizeEntry(entry: JournalEntry): NormalizedEntry | null {
       role,
       content: entry.message.content,
       timestamp: entry.timestamp ?? '',
+    }
+  }
+
+  // DSH (DeepSeek Harness) sessions:
+  //   {"type":"user/message","data":{"role":"user","content":[...]},      "time":1788169746387}
+  //   {"type":"assistant/message","data":{"message":{"role":"assistant","content":[...]}}, "time":...}
+  if (entry.type === 'user/message' || entry.type === 'assistant/message') {
+    const data = entry.data ?? {}
+    const message = entry.type === 'user/message' ? data : data.message
+    const role = message?.role
+    if (role !== 'user' && role !== 'assistant') return null
+    if (message?.content === undefined) return null
+    return {
+      role,
+      content: message.content,
+      timestamp: entry.time ? new Date(entry.time).toISOString() : '',
     }
   }
 

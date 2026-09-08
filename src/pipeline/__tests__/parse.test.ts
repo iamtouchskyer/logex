@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { writeFileSync, unlinkSync, mkdtempSync } from 'fs'
+import { execFileSync } from 'child_process'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import type { JournalEntry } from '../types'
@@ -252,5 +253,98 @@ describe('extractMessages', () => {
 
     const msgs = extractMessages(entries)
     expect(msgs).toHaveLength(0)
+  })
+
+  it('parses DSH user/message entries with epoch-ms timestamps', () => {
+    const entries: JournalEntry[] = [
+      {
+        type: 'user/message',
+        data: { role: 'user', content: [{ type: 'text', text: 'docx pptx xlsx coverage?' }] },
+        time: 1788169746387,
+      } as JournalEntry,
+    ]
+
+    const msgs = extractMessages(entries)
+    expect(msgs).toHaveLength(1)
+    expect(msgs[0].role).toBe('user')
+    expect(msgs[0].text).toBe('docx pptx xlsx coverage?')
+    expect(msgs[0].timestamp).toBe(new Date(1788169746387).toISOString())
+  })
+
+  it('parses DSH assistant/message entries nested under data.message', () => {
+    const entries: JournalEntry[] = [
+      {
+        type: 'assistant/message',
+        data: {
+          message: {
+            role: 'assistant',
+            content: [
+              { type: 'reasoning', text: 'internal scratch — not surface text' },
+              { type: 'text', text: 'Here is the coverage table.' },
+            ],
+          },
+        },
+        time: 1788169748911,
+      } as JournalEntry,
+    ]
+
+    const msgs = extractMessages(entries)
+    expect(msgs).toHaveLength(1)
+    expect(msgs[0].role).toBe('assistant')
+    expect(msgs[0].text).toBe('Here is the coverage table.')
+    expect(msgs[0].text).not.toContain('internal scratch')
+  })
+
+  it('skips DSH non-message entries (session header, chunks, steps)', () => {
+    const sessionHeader = JSON.stringify({ type: 'session', id: 'session-abc', cwd: '/tmp/x' })
+    const reasoning = JSON.stringify({ type: 'reasoning-chunks', data: {} })
+    const step = JSON.stringify({ type: 'step/start', data: {} })
+    const userMsg = JSON.stringify({
+      type: 'user/message',
+      data: { role: 'user', content: [{ type: 'text', text: 'real user question' }] },
+      time: 1788169746387,
+    })
+    const file = writeTmpJsonl([sessionHeader, reasoning, step, userMsg])
+
+    const entries = parseJsonl(file)
+    expect(entries).toHaveLength(4)
+    // resolveSessionId in prepare.ts reads the DSH session header via first.id
+    expect(entries[0].type).toBe('session')
+    expect((entries[0] as unknown as { id?: string }).id).toBe('session-abc')
+
+    const msgs = extractMessages(entries)
+    expect(msgs).toHaveLength(1)
+    expect(msgs[0].role).toBe('user')
+    unlinkSync(file)
+  })
+
+  it('parses a zstd-compressed transcript when the zstd binary exists', () => {
+    let hasZstd = false
+    try {
+      execFileSync('zstd', ['--version'])
+      hasZstd = true
+    } catch {
+      hasZstd = false
+    }
+    if (!hasZstd) return
+
+    const dir = mkdtempSync(join(tmpdir(), 'sb-test-'))
+    const plain = join(dir, 'test.jsonl')
+    const packed = join(dir, 'test.jsonl.zst')
+    const line = JSON.stringify({
+      type: 'user/message',
+      data: { role: 'user', content: [{ type: 'text', text: 'compressed transcript line' }] },
+      time: 1788169746387,
+    })
+    writeFileSync(plain, line)
+    execFileSync('zstd', ['-f', '-q', plain, '-o', packed])
+
+    const entries = parseJsonl(packed)
+    expect(entries).toHaveLength(1)
+    const msgs = extractMessages(entries)
+    expect(msgs).toHaveLength(1)
+    expect(msgs[0].text).toBe('compressed transcript line')
+    unlinkSync(plain)
+    unlinkSync(packed)
   })
 })

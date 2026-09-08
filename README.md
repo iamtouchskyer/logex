@@ -44,7 +44,7 @@ logex mcp                  # start MCP server for other agents
 
 The agent is the one deciding topic boundaries and drafting the prose — `logex` is the scaffolding around it.
 
-**Supported transcripts.** The parser reads Claude Code, Codex, and Pi session JSONL. Auto-discovery (`logex list`) scans `~/.claude/projects/`, `~/.codex/sessions/`, and `~/.pi/agent/sessions/`; you can also pass any JSONL path directly: `/logex <path.jsonl>`.
+**Supported transcripts.** The parser reads Claude Code, Codex, Pi, and DSH (DeepSeek Harness) session JSONL. Auto-discovery (`logex list`) scans `~/.claude/projects/`, `~/.codex/sessions/`, and `~/.pi/agent/sessions/`; DSH sessions live under `~/.dsh/sessions/<project>/session-*/session.jsonl.zstd` and are decompressed transparently when the `zstd` binary is available; you can also pass any JSONL path directly: `/logex <path.jsonl>`.
 
 ### Claude Code integration (plugin + skill + hook)
 
