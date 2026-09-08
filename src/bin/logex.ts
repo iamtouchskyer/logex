@@ -62,7 +62,7 @@ program
     const entries = listAllSessions(10);
     if (entries.length === 0) {
       process.stdout.write(
-        "No sessions found under ~/.claude/projects/ or ~/.codex/sessions/\n",
+        "No sessions found under ~/.claude/projects/, ~/.codex/sessions/, or ~/.pi/agent/sessions/\n",
       );
       return;
     }

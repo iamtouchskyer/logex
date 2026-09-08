@@ -28,7 +28,7 @@ export function listRecentSessions(limit = 10): SessionEntry[] {
       continue;
     }
     if (!stat.isDirectory()) continue;
-    for (const f of readdirSync(dir)) {
+    for (const f of safeReadDir(dir)) {
       if (!f.endsWith(".jsonl")) continue;
       const p = join(dir, f);
       try {
@@ -96,7 +96,7 @@ export function listRecentPiSessions(limit = 10): SessionEntry[] {
     }
     if (!stat.isDirectory()) continue;
     const project = dir.replace(/^-+|-+$/g, "") || "pi";
-    for (const f of readdirSync(projectDir)) {
+    for (const f of safeReadDir(projectDir)) {
       if (!f.endsWith(".jsonl")) continue;
       const p = join(projectDir, f);
       try {

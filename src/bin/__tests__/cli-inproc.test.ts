@@ -42,10 +42,10 @@ describe("logex bin (in-process)", () => {
     await new Promise((r) => setImmediate(r));
     const out = writeSpy.mock.calls.map((c) => String(c[0])).join("");
     // The handler ALWAYS writes at least one line:
-    //  - "No sessions found under ~/.claude/projects/ or ~/.codex/sessions/\n" when empty
+    //  - "No sessions found under ~/.claude/projects/, ~/.codex/sessions/, or ~/.pi/agent/sessions/\n" when empty
     //  - one "<ISO-timestamp>  <project>  <path>\n" per entry otherwise
     expect(out.length).toBeGreaterThan(0);
-    const isEmpty = /No sessions found under ~\/\.claude\/projects\/ or ~\/\.codex\/sessions\//.test(out);
+    const isEmpty = /No sessions found under ~\/\.claude\/projects\/, ~\/\.codex\/sessions\/, or ~\/\.pi\/agent\/sessions\//.test(out);
     // ISO 8601 timestamp at start of a line followed by two-space separators
     const hasEntry =
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z {2}\S+ {2}\S+/m.test(out);
