@@ -36,3 +36,5 @@ coverage/
 
 # vscode packaging artifact
 *.vsix
+
+e2e/artifacts/

@@ -17,9 +17,10 @@ export default defineConfig({
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
   ],
   webServer: {
-    // Use `vercel dev` so /api/* routes are served alongside the Vite frontend.
-    // Plain `vite` leaves API routes unresolved and causes most e2e assertions to fail.
-    command: `npx vercel dev --listen ${E2E_PORT} --yes`,
+    // Vite dev server. Every e2e spec mocks /api/* via page.route(), so no
+    // backend is needed — `vercel dev` (the previous command) required Vercel
+    // credentials and blocked credential-free CI entirely.
+    command: `npx vite --port ${E2E_PORT} --strictPort`,
     url: `http://localhost:${E2E_PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

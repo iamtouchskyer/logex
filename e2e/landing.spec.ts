@@ -86,6 +86,18 @@ test('landing page loads and shows article list', async ({ page }) => {
   await expect(page.locator('.sidebar-wrapper--desktop .sidebar__brand')).toBeVisible()
 })
 
+test('landing subtitle renders the supported-transcript list', async ({ page }, testInfo) => {
+  // The subtitle lives on the public Landing hero, shown only when signed out.
+  await page.route('**/api/auth/me', (route) => route.fulfill({ status: 401, contentType: 'application/json', body: '{}' }))
+  await page.goto('/')
+  await page.waitForLoadState('networkidle')
+
+  // Copy contract: the subtitle must track the parser's supported formats.
+  await expect(page.locator('.landing__subtitle')).toContainText('Claude Code, Codex, Pi')
+  await page.screenshot({ path: 'e2e/artifacts/landing-subtitle.png', fullPage: false })
+  await testInfo.attach('landing-subtitle', { path: 'e2e/artifacts/landing-subtitle.png', contentType: 'image/png' })
+})
+
 test('article cards render with correct count', async ({ page }) => {
   await page.goto('/')
   await page.waitForLoadState('networkidle')
