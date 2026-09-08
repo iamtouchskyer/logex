@@ -93,7 +93,7 @@ Articles are stored in the `iamtouchskyer/logex-data` repo on GitHub — logex p
 
 ### Experimental integrations
 
-The repo also ships minimal integrations that are not part of the stable surface yet: a **VS Code extension** (`vscode-extension/`, command palette → `Logex: Prepare Session for Article` — picks a session, runs `logex prepare`, opens the JSON result) and a **Pi extension** skeleton (`pi-extension/`, no runtime behavior yet).
+The repo also ships minimal integrations that are not part of the stable surface yet: a **VS Code extension** (on the [marketplace](https://marketplace.visualstudio.com/items?itemName=touchskyer.logex-vscode) — command palette → `Logex: Prepare Session for Article` — picks a session, runs `logex prepare`, opens the JSON result) and a **Pi extension** (`pi-extension/`, registers the `logex_write` tool and the `/logex` command).
 
 ### License
 
@@ -188,7 +188,7 @@ Cursor 读取 `~/.cursor/mcp.json`（或项目级 `.cursor/mcp.json`），其它
 
 ### 实验性集成
 
-仓库里还有两个尚未进入稳定面的集成：**VS Code 扩展**（`vscode-extension/`，命令面板 → `Logex: Prepare Session for Article`——选 session、跑 `logex prepare`、打开 JSON 结果）和 **Pi 扩展**骨架（`pi-extension/`，暂无运行时行为）。
+仓库里还有两个尚未进入稳定面的集成：**VS Code 扩展**（已上架 [marketplace](https://marketplace.visualstudio.com/items?itemName=touchskyer.logex-vscode)——命令面板 → `Logex: Prepare Session for Article`，选 session、跑 `logex prepare`、打开 JSON 结果）和 **Pi 扩展**（`pi-extension/`，注册 `logex_write` 工具和 `/logex` 命令）。
 
 ### License
 
@@ -273,7 +273,7 @@ Cursor は `~/.cursor/mcp.json`（プロジェクト単位なら `.cursor/mcp.js
 
 ### 実験的インテグレーション
 
-リポジトリには安定版前の最小統合も含まれます：**VS Code 拡張**（`vscode-extension/`、コマンドパレット → `Logex: Prepare Session for Article`——セッションを選び `logex prepare` を実行し、JSON 結果を開く）と **Pi 拡張**の skeleton（`pi-extension/`、ランタイム動作は未実装）。
+リポジトリには安定版前の最小統合も含まれます：**VS Code 拡張**（[marketplace](https://marketplace.visualstudio.com/items?itemName=touchskyer.logex-vscode) で公開中——コマンドパレット → `Logex: Prepare Session for Article`、セッションを選び `logex prepare` を実行し、JSON 結果を開く）と **Pi 拡張**（`pi-extension/`、`logex_write` ツールと `/logex` コマンドを登録）。
 
 ### License
 
@@ -356,7 +356,7 @@ Cursor 은 `~/.cursor/mcp.json`(프로젝트 단위는 `.cursor/mcp.json`)을 �
 
 ### 실험적 통합
 
-저장소에는 아직 안정 버전이 아닌 최소 통합도 있습니다: **VS Code 확장**(`vscode-extension/`, 커맨드 팔레트 → `Logex: Prepare Session for Article`——세션을 고르고 `logex prepare`를 실행해 JSON 결과를 엽니다)과 **Pi 확장** skeleton(`pi-extension/`, 런타임 동작 미구현).
+저장소에는 아직 안정 버전이 아닌 최소 통합도 있습니다: **VS Code 확장**([marketplace](https://marketplace.visualstudio.com/items?itemName=touchskyer.logex-vscode) 등록됨——커맨드 팔레트 → `Logex: Prepare Session for Article`, 세션을 고르고 `logex prepare`를 실행해 JSON 결과를 엽니다)과 **Pi 확장**(`pi-extension/`, `logex_write` 도구와 `/logex` 명령 등록).
 
 ### License
 
@@ -439,7 +439,7 @@ Cursor lee `~/.cursor/mcp.json` (o `.cursor/mcp.json` por proyecto); la mayoría
 
 ### Integraciones experimentales
 
-El repo también incluye integraciones mínimas que aún no son parte de la superficie estable: una **extensión de VS Code** (`vscode-extension/`, paleta de comandos → `Logex: Prepare Session for Article` — elige una sesión, ejecuta `logex prepare` y abre el JSON resultante) y un esqueleto de **extensión Pi** (`pi-extension/`, sin comportamiento en runtime todavía).
+El repo también incluye integraciones mínimas que aún no son parte de la superficie estable: una **extensión de VS Code** (publicada en el [marketplace](https://marketplace.visualstudio.com/items?itemName=touchskyer.logex-vscode) — paleta de comandos → `Logex: Prepare Session for Article`: elige una sesión, ejecuta `logex prepare` y abre el JSON resultante) y una **extensión Pi** (`pi-extension/`, registra la herramienta `logex_write` y el comando `/logex`).
 
 ### Licencia
 
