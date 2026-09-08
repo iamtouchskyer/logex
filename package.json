@@ -1,6 +1,6 @@
 {
   "name": "@touchskyer/logex",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "type": "module",
   "description": "Write blog-style session papers from coding-agent session transcripts (Claude Code, Codex, Pi)",
   "license": "MIT",
